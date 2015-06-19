@@ -471,7 +471,9 @@ define(function (require) {
      */
     function _stageBg(stage) {
         stage.setBgColor(stage.bgColor);
-        stage.setBgImg(stage.bgImg, stage.bgImgRepeatPattern);
+        if (stage.bgImg) {
+            stage.setBgImg(stage.bgImg, stage.bgImgRepeatPattern);
+        }
     }
 
     /**
@@ -485,6 +487,11 @@ define(function (require) {
         stage.setParallax(parallaxOpts);
     }
 
+    /**
+     * 给 stage 里的 displayObject 设置 asset
+     *
+     * @param {Object} stage 场景对象
+     */
     function _displayObjectAsset(stage) {
         var asset = this.asset;
         var resource = this.resource;
@@ -493,7 +500,9 @@ define(function (require) {
             var displayObject = displayObjectList[i];
             // 只检测需要图片的 DisplayObject 例如 bitmap, spriteSheet 等
             // 像 text 等构造函数里面不需要 image 参数的就不检测了
-            if (displayObject instanceof ig.Bitmap) {
+            if (displayObject instanceof ig.Bitmap
+                || displayObject instanceof ig.BitmapPolygon
+            ) {
                 var imageAsset = util.getImgAsset(displayObject.image, asset, resource);
                 if (!imageAsset) {
                     throw new Error(displayObject.name + ' image is not in game.asset');
@@ -567,24 +576,31 @@ define(function (require) {
      */
     function preLoadResource(callback) {
         var me = this;
-        me.loadResource(
-            me.resource,
-            function (data) {
-                me.asset = data;
-                callback.call(me);
-                me.fire('loadResDone');
-            },
-            {
-                processCallback: function (loadedCount, total) {
-                    me.fire('loadResProcess', {
-                        data: {
-                            loadedCount: loadedCount,
-                            total: total
-                        }
-                    });
+        if (Array.isArray(me.resource) && me.resource.length) {
+            me.loadResource(
+                me.resource,
+                function (data) {
+                    me.asset = data;
+                    callback.call(me);
+                    me.fire('loadResDone');
+                },
+                {
+                    processCallback: function (loadedCount, total) {
+                        me.fire('loadResProcess', {
+                            data: {
+                                loadedCount: loadedCount,
+                                total: total
+                            }
+                        });
+                    }
                 }
-            }
-        );
+            );
+        }
+        else {
+            me.asset = {};
+            callback.call(me);
+            me.fire('loadResDone');
+        }
     }
 
     /**

@@ -10,7 +10,6 @@ define(function (require) {
     var util = require('../util');
     var Vector = require('../Vector');
 
-
     /**
      * Particle 基类
      *

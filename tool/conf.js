@@ -17,16 +17,20 @@ exports.modules = {
         {name: 'ig/DisplayObject', refName: 'DisplayObject'},
         {name: 'ig/Text', refName: 'Text'},
         {name: 'ig/Bitmap', refName: 'Bitmap'},
+        {name: 'ig/BitmapPolygon', refName: 'BitmapPolygon'},
         {name: 'ig/ResourceLoader'},
         {name: 'ig/Game', refName: 'Game'},
         {name: 'ig/Stage'},
         {name: 'ig/domEvt'},
 
         {name: 'ig/Projection'},
-        {name: 'ig/Rectangle'},
+
         {name: 'ig/particle/Particle'},
         {name: 'ig/particle/Emitter', refName: 'Emitter', folder: 'particle'},
-        {name: 'ig/particle/ParticleEffect', refName: 'ParticleEffect', folder: 'particle'}
+        {name: 'ig/particle/ParticleEffect', refName: 'ParticleEffect', folder: 'particle'},
+
+        {name: 'ig/Rectangle', refName: 'Rectangle'},
+        {name: 'ig/Polygon', refName: 'Polygon'}
 
 
         // refName 指要挂载到 window.ig 这个全局空间上的名字

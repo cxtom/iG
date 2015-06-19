@@ -12,6 +12,9 @@ define(function (require) {
 
     /**
      * Bitmap 基类
+     * 改变图片的显示大小可以设置 width, height 属性
+     * Bitmap 和 BitmapPolygon 的区别是，Bitmap 的形状大小跟 width 和 height 属性一致
+     * 而 BitmapPolygon 可以通过 points 自由的设置形状大小
      *
      * @extends DisplayObject
      * @constructor
@@ -37,7 +40,10 @@ define(function (require) {
             sx: 0,
             sy: 0,
             sWidth: 0,
-            sHeight: 0
+            sHeight: 0,
+
+            // 是否使用缓存
+            useCache: true
         }, opts);
 
         return this;
@@ -50,6 +56,38 @@ define(function (require) {
         constructor: Bitmap,
 
         /**
+         * 初始化缓存 canvas
+         *
+         * @return {Object} Bitmap 实例
+         */
+        initCacheCanvas: function () {
+            if (!this.cacheCanvas) {
+                this.cacheCanvas = document.createElement('canvas');
+                this.cacheCtx = this.cacheCanvas.getContext('2d');
+            }
+            this.cacheCanvas.width = this.width;
+            this.cacheCanvas.height = this.height;
+            this.cache();
+            return this;
+        },
+
+        /**
+         * 缓存，把需要重复绘制的画面数据进行缓存起来，减少调用 canvas API 的消耗
+         *
+         * @return {Object} Bitmap 实例
+         */
+        cache: function () {
+            this.cacheCtx.save();
+            this.cacheCtx.drawImage(
+                this.asset,
+                this.sx, this.sy, this.sWidth, this.sHeight,
+                0, 0, this.cacheCanvas.width, this.cacheCanvas.height
+            );
+            this.cacheCtx.restore();
+            return this;
+        },
+
+        /**
          * 渲染当前 Bitmap 实例
          *
          * @param {Object} ctx canvas 2d context 对象
@@ -57,10 +95,42 @@ define(function (require) {
          * @return {Object} 当前 Bitmap 实例
          */
         render: function (ctx) {
-            // console.warn(2);
-            ctx.save();
-            ctx.globalAlpha = this.alpha;
+            _setInitDimension.call(this);
 
+            ctx.save();
+
+            Bitmap.superClass.render.apply(this, arguments);
+            this.matrix.setCtxTransform(ctx);
+
+            if (this.useCache) {
+                if (!this._.execCache) {
+                    this._.execCache = true;
+                    this.initCacheCanvas();
+                }
+                ctx.drawImage(this.cacheCanvas, this.x, this.y);
+            }
+            else {
+                ctx.drawImage(
+                    this.asset,
+                    this.sx, this.sy, this.sWidth, this.sHeight,
+                    this.x, this.y, this.width, this.height
+                );
+            }
+
+            ctx.restore();
+
+            return this;
+        }
+    };
+
+    /**
+     * 设置 Bitmap 实例的 width, height
+     * 由于在实例化 Bitmap 的时候，图片资源还没有加载完成
+     * 只有在 render 的时候才能获取到图片的 asset，这个时候去设置当前 Bitmap 实例的 width 等
+     */
+    function _setInitDimension() {
+        if (!this._.isInitDimension) {
+            this._.isInitDimension = true;
             if (this.width === 0) {
                 this.width = this.asset.width;
             }
@@ -76,23 +146,8 @@ define(function (require) {
             if (this.sHeight === 0) {
                 this.sHeight = this.asset.height;
             }
-
-            Bitmap.superClass.render.apply(this, arguments);
-
-            var m = this.matrix.m;
-            ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-
-            ctx.drawImage(
-                this.asset,
-                this.sx, this.sy, this.sWidth, this.sHeight,
-                this.x, this.y, this.width, this.height
-            );
-
-            ctx.restore();
-
-            return this;
         }
-    };
+    }
 
     util.inherits(Bitmap, Rectangle);
 

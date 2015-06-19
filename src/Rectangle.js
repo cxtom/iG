@@ -23,9 +23,6 @@ define(function (require) {
      */
     function Rectangle(opts) {
         DisplayObject.call(this, opts);
-
-        // this.generatePoints();
-        // this.getBounds();
         return this;
     }
 
@@ -68,107 +65,8 @@ define(function (require) {
                 };
             }
 
-            // this.originalPoints = util.extend(true, [], this.points);
-
             this.cx = this.x + this.width / 2;
             this.cy = this.y + this.height / 2;
-            return this;
-        },
-
-        /**
-         * 创建路径，只是创建路径，并没有画出来
-         *
-         * @param {Object} ctx canvas 2d context 对象
-         *
-         * @return {Object} Rectangle 实例
-         */
-        createPath: function (ctx) {
-            var points = this.points;
-            var len = points.length;
-            if (!len) {
-                return;
-            }
-
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (var i = 0; i < len; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-            ctx.closePath();
-            return this;
-        },
-
-        /**
-         * 移动
-         * x, y 是指要移动到的横轴、纵轴目标位置即终点坐标
-         *
-         * @param {number} x 终点横坐标
-         * @param {number} y 终点纵坐标
-         *
-         * @return {Object} Rectangle 实例
-         */
-        move: function (x, y) {
-            this.x = x;
-            this.y = y;
-
-            this.generatePoints();
-            this.getBounds();
-
-            return this;
-        },
-
-        /**
-         * 移动一步，重写了父类的 moveStep
-         *
-         * @return {Object} Rectangle 实例
-         */
-        // moveStep: function () {
-        //     // console.warn(1);
-        //     this.vX += this.aX;
-        //     this.vX *= this.frictionX;
-        //     this.x += this.vX;
-
-        //     this.vY += this.aY;
-        //     this.vY *= this.frictionY;
-        //     this.y += this.vY;
-
-        //     this.generatePoints();
-        //     this.getBounds();
-
-        //     return this;
-        // },
-
-        /**
-         * 渲染当前 Rectangle 实例
-         *
-         * @param {Object} ctx canvas 2d context 对象
-         *
-         * @return {Object} 当前 Rectangle 实例
-         */
-        render: function (ctx) {
-            // console.warn(1);
-            ctx.save();
-            ctx.fillStyle = this.fillStyle;
-            ctx.strokeStyle = this.strokeStyle;
-            ctx.globalAlpha = this.alpha;
-
-            this.matrix.reset();
-            this.matrix.translate(this.cx, this.cy);
-            this.matrix.rotate(this.angle);
-            this.matrix.scale(this.scaleX, this.scaleY);
-            this.matrix.translate(-this.cx, -this.cy);
-
-            this.generatePoints();
-            this.getBounds();
-            this.createPath(ctx);
-
-            ctx.fill();
-            ctx.stroke();
-
-            this.debugRender(ctx);
-
-            ctx.restore();
-
             return this;
         },
 
@@ -207,6 +105,29 @@ define(function (require) {
                 height: maxY - minY
             };
 
+            return this;
+        },
+
+        /**
+         * 创建路径，只是创建路径，并没有画出来
+         *
+         * @param {Object} ctx canvas 2d context 对象
+         *
+         * @return {Object} Rectangle 实例
+         */
+        createPath: function (ctx) {
+            var points = this.points;
+            var len = points.length;
+            if (!len) {
+                return;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (var i = 0; i < len; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
             return this;
         },
 
@@ -328,6 +249,77 @@ define(function (require) {
         },
 
         /**
+         * 移动
+         * x, y 是指要移动到的横轴、纵轴目标位置即终点坐标
+         *
+         * @param {number} x 终点横坐标
+         * @param {number} y 终点纵坐标
+         *
+         * @return {Object} Rectangle 实例
+         */
+        move: function (x, y) {
+            this.x = x;
+            this.y = y;
+
+            this.generatePoints();
+            this.getBounds();
+
+            return this;
+        },
+
+        /**
+         * 移动一步，重写了父类的 moveStep
+         *
+         * @return {Object} Rectangle 实例
+         */
+        // moveStep: function () {
+        //     // console.warn(1);
+        //     this.vX += this.aX;
+        //     this.vX *= this.frictionX;
+        //     this.x += this.vX;
+
+        //     this.vY += this.aY;
+        //     this.vY *= this.frictionY;
+        //     this.y += this.vY;
+
+        //     this.generatePoints();
+        //     this.getBounds();
+
+        //     return this;
+        // },
+
+        /**
+         * 渲染当前 Rectangle 实例
+         *
+         * @param {Object} ctx canvas 2d context 对象
+         *
+         * @return {Object} 当前 Rectangle 实例
+         */
+        render: function (ctx) {
+            ctx.save();
+            ctx.fillStyle = this.fillStyle;
+            ctx.strokeStyle = this.strokeStyle;
+            ctx.globalAlpha = this.alpha;
+
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            this.matrix.rotate(this.angle);
+            this.matrix.scale(this.scaleX, this.scaleY);
+            this.matrix.translate(-this.cx, -this.cy);
+
+            this.generatePoints();
+            this.getBounds();
+            this.createPath(ctx);
+
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.restore();
+            this.debugRender(ctx);
+            return this;
+        },
+
+        /**
          * debug 时渲染边界盒，多边形使用最大最小顶点法来渲染边界盒
          * 碰撞时，根据此边界盒判断
          *
@@ -336,13 +328,22 @@ define(function (require) {
         debugRender: function (ctx) {
             if (this.debug) {
                 ctx.save();
-                ctx.strokeStyle = 'green';
+
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
                 ctx.strokeRect(
                     this.bounds.x,
                     this.bounds.y,
                     this.bounds.width,
                     this.bounds.height
                 );
+
+                ctx.strokeStyle = '#f00';
+                ctx.beginPath();
+                this.createPath(ctx);
+                ctx.closePath();
+                ctx.stroke();
+
                 ctx.restore();
             }
         }

@@ -1949,6 +1949,10 @@ define('ig/Matrix', [
                 x: px,
                 y: py
             };
+        },
+        setCtxTransform: function (ctx) {
+            var m = this.m;
+            ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
         }
     };
     return Matrix;
@@ -2534,6 +2538,28 @@ define('ig/Text', [
             this.cy = this.bounds.y + this.bounds.height / 2;
             return this;
         },
+        createPath: function (ctx) {
+            var points = this.points;
+            var len = points.length;
+            if (!len) {
+                return;
+            }
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (var i = 0; i < len; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            return this;
+        },
+        isPointInPath: function (ctx, x, y) {
+            this.createPath(ctx);
+            return ctx.isPointInPath(x, y);
+        },
+        hitTestPoint: function (x, y) {
+            var stage = this.stage;
+            return this.isPointInPath(stage.ctx, x, y);
+        },
         changeContent: function (content) {
             this.content = content;
             var obj = measureText(this.content, this.isBold, this.fontFamily, this.size);
@@ -2565,8 +2591,7 @@ define('ig/Text', [
             this.matrix.rotate(this.angle);
             this.matrix.scale(this.scaleX, this.scaleY);
             this.matrix.translate(-this.cx, -this.cy);
-            var m = this.matrix.m;
-            ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
+            this.matrix.setCtxTransform(ctx);
             this.generatePoints();
             if (this.useCache) {
                 ctx.drawImage(this.cacheCanvas, this.bounds.x, this.bounds.y);
@@ -2577,32 +2602,10 @@ define('ig/Text', [
             ctx.restore();
             return this;
         },
-        createPath: function (ctx) {
-            var points = this.points;
-            var len = points.length;
-            if (!len) {
-                return;
-            }
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (var i = 0; i < len; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-            ctx.closePath();
-            return this;
-        },
-        isPointInPath: function (ctx, x, y) {
-            this.createPath(ctx);
-            return ctx.isPointInPath(x, y);
-        },
-        hitTestPoint: function (x, y) {
-            var stage = this.stage;
-            return this.isPointInPath(stage.ctx, x, y);
-        },
         debugRender: function (ctx) {
             if (this.debug) {
                 ctx.save();
-                ctx.strokeStyle = 'green';
+                ctx.strokeStyle = '#0f0';
                 ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.width, this.bounds.height);
                 ctx.restore();
             }
@@ -2647,15 +2650,50 @@ define('ig/Bitmap', [
             sx: 0,
             sy: 0,
             sWidth: 0,
-            sHeight: 0
+            sHeight: 0,
+            useCache: true
         }, opts);
         return this;
     }
     Bitmap.prototype = {
         constructor: Bitmap,
+        initCacheCanvas: function () {
+            if (!this.cacheCanvas) {
+                this.cacheCanvas = document.createElement('canvas');
+                this.cacheCtx = this.cacheCanvas.getContext('2d');
+            }
+            this.cacheCanvas.width = this.width;
+            this.cacheCanvas.height = this.height;
+            this.cache();
+            return this;
+        },
+        cache: function () {
+            this.cacheCtx.save();
+            this.cacheCtx.drawImage(this.asset, this.sx, this.sy, this.sWidth, this.sHeight, 0, 0, this.cacheCanvas.width, this.cacheCanvas.height);
+            this.cacheCtx.restore();
+            return this;
+        },
         render: function (ctx) {
+            _setInitDimension.call(this);
             ctx.save();
-            ctx.globalAlpha = this.alpha;
+            Bitmap.superClass.render.apply(this, arguments);
+            this.matrix.setCtxTransform(ctx);
+            if (this.useCache) {
+                if (!this._.execCache) {
+                    this._.execCache = true;
+                    this.initCacheCanvas();
+                }
+                ctx.drawImage(this.cacheCanvas, this.x, this.y);
+            } else {
+                ctx.drawImage(this.asset, this.sx, this.sy, this.sWidth, this.sHeight, this.x, this.y, this.width, this.height);
+            }
+            ctx.restore();
+            return this;
+        }
+    };
+    function _setInitDimension() {
+        if (!this._.isInitDimension) {
+            this._.isInitDimension = true;
             if (this.width === 0) {
                 this.width = this.asset.width;
             }
@@ -2668,16 +2706,102 @@ define('ig/Bitmap', [
             if (this.sHeight === 0) {
                 this.sHeight = this.asset.height;
             }
-            Bitmap.superClass.render.apply(this, arguments);
-            var m = this.matrix.m;
-            ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
-            ctx.drawImage(this.asset, this.sx, this.sy, this.sWidth, this.sHeight, this.x, this.y, this.width, this.height);
+        }
+    }
+    util.inherits(Bitmap, Rectangle);
+    return Bitmap;
+});'use strict';
+define('ig/BitmapPolygon', [
+    'require',
+    './util',
+    './Polygon'
+], function (require) {
+    var util = require('./util');
+    var Polygon = require('./Polygon');
+    function BitmapPolygon(opts) {
+        opts = opts || {};
+        if (!opts.image) {
+            throw new Error('BitmapPolygon must be require a image param');
+        }
+        util.extend(true, this, {
+            sx: 0,
+            sy: 0,
+            sWidth: 0,
+            sHeight: 0,
+            useCache: true
+        }, opts);
+        Polygon.call(this, opts);
+        this.getOriginBounds();
+        return this;
+    }
+    BitmapPolygon.prototype = {
+        constructor: BitmapPolygon,
+        initCacheCanvas: function () {
+            if (!this.cacheCanvas) {
+                this.cacheCanvas = document.createElement('canvas');
+                this.cacheCtx = this.cacheCanvas.getContext('2d');
+            }
+            this.cacheCanvas.width = this.width;
+            this.cacheCanvas.height = this.height;
+            this.cache();
+            return this;
+        },
+        cache: function () {
+            this.cacheCtx.save();
+            this.cacheCtx.drawImage(this.asset, this.sx, this.sy, this.sWidth, this.sHeight, 0, 0, this.width, this.height);
+            this.cacheCtx.restore();
+            return this;
+        },
+        render: function (ctx) {
+            _setInitDimension.call(this);
+            ctx.save();
+            ctx.fillStyle = this.fillStyle;
+            ctx.strokeStyle = this.strokeStyle;
+            ctx.globalAlpha = this.alpha;
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            this.matrix.rotate(this.angle);
+            this.matrix.scale(this.scaleX, this.scaleY);
+            this.matrix.translate(-this.cx, -this.cy);
+            this.matrix.setCtxTransform(ctx);
+            if (this.useCache) {
+                if (!this._.execCache) {
+                    this._.execCache = true;
+                    this.initCacheCanvas();
+                }
+                ctx.drawImage(this.cacheCanvas, this.x, this.y);
+            } else {
+                ctx.drawImage(this.asset, this.sx, this.sy, this.sWidth, this.sHeight, this.x, this.y, this.width, this.height);
+            }
+            this.generatePoints();
+            this.getBounds();
+            this.createPath(ctx);
+            ctx.fill();
+            ctx.stroke();
             ctx.restore();
+            this.debugRender(ctx);
             return this;
         }
     };
-    util.inherits(Bitmap, Rectangle);
-    return Bitmap;
+    function _setInitDimension() {
+        if (!this._.isInitDimension) {
+            this._.isInitDimension = true;
+            if (this.width === 0) {
+                this.width = this.asset.width;
+            }
+            if (this.height === 0) {
+                this.height = this.asset.height;
+            }
+            if (this.sWidth === 0) {
+                this.sWidth = this.asset.width;
+            }
+            if (this.sHeight === 0) {
+                this.sHeight = this.asset.height;
+            }
+        }
+    }
+    util.inherits(BitmapPolygon, Polygon);
+    return BitmapPolygon;
 });define('ig/ResourceLoader', [
     'require',
     './util',
@@ -3067,7 +3191,9 @@ define('ig/Game', [
     };
     function _stageBg(stage) {
         stage.setBgColor(stage.bgColor);
-        stage.setBgImg(stage.bgImg, stage.bgImgRepeatPattern);
+        if (stage.bgImg) {
+            stage.setBgImg(stage.bgImg, stage.bgImgRepeatPattern);
+        }
     }
     function _stageParallax(stage) {
         var parallaxOpts = stage.parallaxOpts;
@@ -3079,7 +3205,7 @@ define('ig/Game', [
         var displayObjectList = stage.displayObjectList;
         for (var i = 0, len = displayObjectList.length; i < len; i++) {
             var displayObject = displayObjectList[i];
-            if (displayObject instanceof ig.Bitmap) {
+            if (displayObject instanceof ig.Bitmap || displayObject instanceof ig.BitmapPolygon) {
                 var imageAsset = util.getImgAsset(displayObject.image, asset, resource);
                 if (!imageAsset) {
                     throw new Error(displayObject.name + ' image is not in game.asset');
@@ -3127,20 +3253,26 @@ define('ig/Game', [
     }
     function preLoadResource(callback) {
         var me = this;
-        me.loadResource(me.resource, function (data) {
-            me.asset = data;
+        if (Array.isArray(me.resource) && me.resource.length) {
+            me.loadResource(me.resource, function (data) {
+                me.asset = data;
+                callback.call(me);
+                me.fire('loadResDone');
+            }, {
+                processCallback: function (loadedCount, total) {
+                    me.fire('loadResProcess', {
+                        data: {
+                            loadedCount: loadedCount,
+                            total: total
+                        }
+                    });
+                }
+            });
+        } else {
+            me.asset = {};
             callback.call(me);
             me.fire('loadResDone');
-        }, {
-            processCallback: function (loadedCount, total) {
-                me.fire('loadResProcess', {
-                    data: {
-                        loadedCount: loadedCount,
-                        total: total
-                    }
-                });
-            }
-        });
+        }
     }
     function initGame() {
         this.canvas = util.domWrap(this.canvas, document.createElement('div'), 'ig-game-container-' + this.name);
@@ -3723,181 +3855,6 @@ define('ig/domEvt', [
     };
     return Projection;
 });'use strict';
-define('ig/Rectangle', [
-    'require',
-    './util',
-    './Vector',
-    './Projection',
-    './DisplayObject'
-], function (require) {
-    var util = require('./util');
-    var Vector = require('./Vector');
-    var Projection = require('./Projection');
-    var DisplayObject = require('./DisplayObject');
-    function Rectangle(opts) {
-        DisplayObject.call(this, opts);
-        return this;
-    }
-    Rectangle.prototype = {
-        constructor: Rectangle,
-        generatePoints: function () {
-            this.points = [
-                {
-                    x: this.x,
-                    y: this.y
-                },
-                {
-                    x: this.x + this.width,
-                    y: this.y
-                },
-                {
-                    x: this.x + this.width,
-                    y: this.y + this.height
-                },
-                {
-                    x: this.x,
-                    y: this.y + this.height
-                }
-            ];
-            for (var i = 0, len = this.points.length; i < len; i++) {
-                var transformPoint = this.matrix.transformPoint(this.points[i].x, this.points[i].y);
-                this.points[i] = {
-                    x: transformPoint.x,
-                    y: transformPoint.y
-                };
-            }
-            this.cx = this.x + this.width / 2;
-            this.cy = this.y + this.height / 2;
-            return this;
-        },
-        createPath: function (ctx) {
-            var points = this.points;
-            var len = points.length;
-            if (!len) {
-                return;
-            }
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (var i = 0; i < len; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-            ctx.closePath();
-            return this;
-        },
-        move: function (x, y) {
-            this.x = x;
-            this.y = y;
-            this.generatePoints();
-            this.getBounds();
-            return this;
-        },
-        render: function (ctx) {
-            ctx.save();
-            ctx.fillStyle = this.fillStyle;
-            ctx.strokeStyle = this.strokeStyle;
-            ctx.globalAlpha = this.alpha;
-            this.matrix.reset();
-            this.matrix.translate(this.cx, this.cy);
-            this.matrix.rotate(this.angle);
-            this.matrix.scale(this.scaleX, this.scaleY);
-            this.matrix.translate(-this.cx, -this.cy);
-            this.generatePoints();
-            this.getBounds();
-            this.createPath(ctx);
-            ctx.fill();
-            ctx.stroke();
-            this.debugRender(ctx);
-            ctx.restore();
-            return this;
-        },
-        getBounds: function () {
-            var points = this.points;
-            var minX = Number.MAX_VALUE;
-            var maxX = Number.MIN_VALUE;
-            var minY = Number.MAX_VALUE;
-            var maxY = Number.MIN_VALUE;
-            for (var i = 0, len = points.length; i < len; i++) {
-                if (points[i].x < minX) {
-                    minX = points[i].x;
-                }
-                if (points[i].x > maxX) {
-                    maxX = points[i].x;
-                }
-                if (points[i].y < minY) {
-                    minY = points[i].y;
-                }
-                if (points[i].y > maxY) {
-                    maxY = points[i].y;
-                }
-            }
-            this.bounds = {
-                x: minX,
-                y: minY,
-                width: maxX - minX,
-                height: maxY - minY
-            };
-            return this;
-        },
-        isPointInPath: function (ctx, x, y) {
-            this.createPath(ctx);
-            return ctx.isPointInPath(x, y);
-        },
-        hitTestPoint: function (x, y) {
-            var stage = this.stage;
-            return this.isPointInPath(stage.ctx, x, y);
-        },
-        getAxes: function () {
-            var v1 = new Vector();
-            var v2 = new Vector();
-            var axes = [];
-            var points = this.points;
-            for (var i = 0, len = points.length - 1; i < len; i++) {
-                v1.x = points[i].x;
-                v1.y = points[i].y;
-                v2.x = points[i + 1].x;
-                v2.y = points[i + 1].y;
-                axes.push(v1.edge(v2).normal());
-            }
-            return axes;
-        },
-        project: function (axis) {
-            var scalars = [];
-            var v = new Vector();
-            var points = this.points;
-            for (var i = 0, len = points.length; i < len; i++) {
-                var point = points[i];
-                v.x = point.x;
-                v.y = point.y;
-                scalars.push(v.dot(axis));
-            }
-            return new Projection(Math.min.apply(Math, scalars), Math.max.apply(Math, scalars));
-        },
-        collidesWith: function (rectangle) {
-            return !(this.x + this.width < rectangle.x || rectangle.x + rectangle.width < this.x || this.y + this.height < rectangle.y || rectangle.y + rectangle.height < this.y);
-        },
-        separationOnAxes: function (axes, rectangle) {
-            for (var i = 0, len = axes.length; i < len; i++) {
-                var axis = axes[i];
-                var projection1 = rectangle.project(axis);
-                var projection2 = this.project(axis);
-                if (!projection1.overlaps(projection2)) {
-                    return true;
-                }
-            }
-            return false;
-        },
-        debugRender: function (ctx) {
-            if (this.debug) {
-                ctx.save();
-                ctx.strokeStyle = 'green';
-                ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.width, this.bounds.height);
-                ctx.restore();
-            }
-        }
-    };
-    util.inherits(Rectangle, DisplayObject);
-    return Rectangle;
-});'use strict';
 define('ig/particle/Particle', [
     'require',
     '../util',
@@ -4105,6 +4062,422 @@ define('ig/particle/Emitter', [
     ParticleEffect.BoxCollision = BoxCollision;
     ParticleEffect.RepulsiveField = RepulsiveField;
     return ParticleEffect;
+});'use strict';
+define('ig/Rectangle', [
+    'require',
+    './util',
+    './Vector',
+    './Projection',
+    './DisplayObject'
+], function (require) {
+    var util = require('./util');
+    var Vector = require('./Vector');
+    var Projection = require('./Projection');
+    var DisplayObject = require('./DisplayObject');
+    function Rectangle(opts) {
+        DisplayObject.call(this, opts);
+        return this;
+    }
+    Rectangle.prototype = {
+        constructor: Rectangle,
+        generatePoints: function () {
+            this.points = [
+                {
+                    x: this.x,
+                    y: this.y
+                },
+                {
+                    x: this.x + this.width,
+                    y: this.y
+                },
+                {
+                    x: this.x + this.width,
+                    y: this.y + this.height
+                },
+                {
+                    x: this.x,
+                    y: this.y + this.height
+                }
+            ];
+            for (var i = 0, len = this.points.length; i < len; i++) {
+                var transformPoint = this.matrix.transformPoint(this.points[i].x, this.points[i].y);
+                this.points[i] = {
+                    x: transformPoint.x,
+                    y: transformPoint.y
+                };
+            }
+            this.cx = this.x + this.width / 2;
+            this.cy = this.y + this.height / 2;
+            return this;
+        },
+        getBounds: function () {
+            var points = this.points;
+            var minX = Number.MAX_VALUE;
+            var maxX = Number.MIN_VALUE;
+            var minY = Number.MAX_VALUE;
+            var maxY = Number.MIN_VALUE;
+            for (var i = 0, len = points.length; i < len; i++) {
+                if (points[i].x < minX) {
+                    minX = points[i].x;
+                }
+                if (points[i].x > maxX) {
+                    maxX = points[i].x;
+                }
+                if (points[i].y < minY) {
+                    minY = points[i].y;
+                }
+                if (points[i].y > maxY) {
+                    maxY = points[i].y;
+                }
+            }
+            this.bounds = {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+            return this;
+        },
+        createPath: function (ctx) {
+            var points = this.points;
+            var len = points.length;
+            if (!len) {
+                return;
+            }
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (var i = 0; i < len; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            return this;
+        },
+        isPointInPath: function (ctx, x, y) {
+            this.createPath(ctx);
+            return ctx.isPointInPath(x, y);
+        },
+        hitTestPoint: function (x, y) {
+            var stage = this.stage;
+            return this.isPointInPath(stage.ctx, x, y);
+        },
+        getAxes: function () {
+            var v1 = new Vector();
+            var v2 = new Vector();
+            var axes = [];
+            var points = this.points;
+            for (var i = 0, len = points.length - 1; i < len; i++) {
+                v1.x = points[i].x;
+                v1.y = points[i].y;
+                v2.x = points[i + 1].x;
+                v2.y = points[i + 1].y;
+                axes.push(v1.edge(v2).normal());
+            }
+            return axes;
+        },
+        project: function (axis) {
+            var scalars = [];
+            var v = new Vector();
+            var points = this.points;
+            for (var i = 0, len = points.length; i < len; i++) {
+                var point = points[i];
+                v.x = point.x;
+                v.y = point.y;
+                scalars.push(v.dot(axis));
+            }
+            return new Projection(Math.min.apply(Math, scalars), Math.max.apply(Math, scalars));
+        },
+        collidesWith: function (rectangle) {
+            return !(this.x + this.width < rectangle.x || rectangle.x + rectangle.width < this.x || this.y + this.height < rectangle.y || rectangle.y + rectangle.height < this.y);
+        },
+        separationOnAxes: function (axes, rectangle) {
+            for (var i = 0, len = axes.length; i < len; i++) {
+                var axis = axes[i];
+                var projection1 = rectangle.project(axis);
+                var projection2 = this.project(axis);
+                if (!projection1.overlaps(projection2)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        move: function (x, y) {
+            this.x = x;
+            this.y = y;
+            this.generatePoints();
+            this.getBounds();
+            return this;
+        },
+        render: function (ctx) {
+            ctx.save();
+            ctx.fillStyle = this.fillStyle;
+            ctx.strokeStyle = this.strokeStyle;
+            ctx.globalAlpha = this.alpha;
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            this.matrix.rotate(this.angle);
+            this.matrix.scale(this.scaleX, this.scaleY);
+            this.matrix.translate(-this.cx, -this.cy);
+            this.generatePoints();
+            this.getBounds();
+            this.createPath(ctx);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+            this.debugRender(ctx);
+            return this;
+        },
+        debugRender: function (ctx) {
+            if (this.debug) {
+                ctx.save();
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.width, this.bounds.height);
+                ctx.strokeStyle = '#f00';
+                ctx.beginPath();
+                this.createPath(ctx);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+    };
+    util.inherits(Rectangle, DisplayObject);
+    return Rectangle;
+});'use strict';
+define('ig/Polygon', [
+    'require',
+    './util',
+    './Vector',
+    './Projection',
+    './DisplayObject'
+], function (require) {
+    var util = require('./util');
+    var Vector = require('./Vector');
+    var Projection = require('./Projection');
+    var DisplayObject = require('./DisplayObject');
+    function Polygon(opts) {
+        DisplayObject.call(this, opts);
+        util.extend(true, this, { points: [] }, opts);
+        for (var i = 0, len = this.points.length; i < len; i++) {
+            var point = this.points[i];
+            this.points[i] = {
+                x: point.x + this.x,
+                y: point.y + this.y
+            };
+        }
+        this.origin = {
+            x: this.x,
+            y: this.y,
+            points: util.extend(true, [], this.points),
+            persistencePoints: util.extend(true, [], this.points)
+        };
+        this.getBounds();
+        this.cx = this.bounds.x + this.bounds.width / 2;
+        this.cy = this.bounds.y + this.bounds.height / 2;
+        return this;
+    }
+    Polygon.prototype = {
+        constructor: Polygon,
+        generatePoints: function () {
+            for (var i = 0, len = this.origin.points.length; i < len; i++) {
+                var transformPoint = this.matrix.transformPoint(this.origin.points[i].x, this.origin.points[i].y);
+                this.points[i] = {
+                    x: transformPoint.x,
+                    y: transformPoint.y
+                };
+            }
+            return this;
+        },
+        getBounds: function () {
+            var points = this.points;
+            var minX = Number.MAX_VALUE;
+            var maxX = Number.MIN_VALUE;
+            var minY = Number.MAX_VALUE;
+            var maxY = Number.MIN_VALUE;
+            for (var i = 0, len = points.length; i < len; i++) {
+                if (points[i].x < minX) {
+                    minX = points[i].x;
+                }
+                if (points[i].x > maxX) {
+                    maxX = points[i].x;
+                }
+                if (points[i].y < minY) {
+                    minY = points[i].y;
+                }
+                if (points[i].y > maxY) {
+                    maxY = points[i].y;
+                }
+            }
+            this.bounds = {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+            return this;
+        },
+        getOriginBounds: function () {
+            var points = this.origin.points;
+            var minX = Number.MAX_VALUE;
+            var maxX = Number.MIN_VALUE;
+            var minY = Number.MAX_VALUE;
+            var maxY = Number.MIN_VALUE;
+            for (var i = 0, len = points.length; i < len; i++) {
+                if (points[i].x < minX) {
+                    minX = points[i].x;
+                }
+                if (points[i].x > maxX) {
+                    maxX = points[i].x;
+                }
+                if (points[i].y < minY) {
+                    minY = points[i].y;
+                }
+                if (points[i].y > maxY) {
+                    maxY = points[i].y;
+                }
+            }
+            this.originBounds = {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+            return this;
+        },
+        createPath: function (ctx) {
+            var points = this.points;
+            var len = points.length;
+            if (!len) {
+                return;
+            }
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (var i = 0; i < len; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            return this;
+        },
+        isPointInPath: function (ctx, x, y) {
+            this.createPath(ctx);
+            return ctx.isPointInPath(x, y);
+        },
+        hitTestPoint: function (x, y) {
+            var stage = this.stage;
+            return this.isPointInPath(stage.ctx, x, y);
+        },
+        getAxes: function () {
+            var v1 = new Vector();
+            var v2 = new Vector();
+            var axes = [];
+            var points = this.points;
+            for (var i = 0, len = points.length - 1; i < len; i++) {
+                v1.x = points[i].x;
+                v1.y = points[i].y;
+                v2.x = points[i + 1].x;
+                v2.y = points[i + 1].y;
+                axes.push(v1.edge(v2).normal());
+            }
+            return axes;
+        },
+        project: function (axis) {
+            var scalars = [];
+            var v = new Vector();
+            var points = this.points;
+            for (var i = 0, len = points.length; i < len; i++) {
+                var point = points[i];
+                v.x = point.x;
+                v.y = point.y;
+                scalars.push(v.dot(axis));
+            }
+            return new Projection(Math.min.apply(Math, scalars), Math.max.apply(Math, scalars));
+        },
+        collidesWith: function (polygon) {
+            var axes = this.getAxes().concat(polygon.getAxes());
+            return !this.separationOnAxes(axes, polygon);
+        },
+        separationOnAxes: function (axes, polygon) {
+            for (var i = 0, len = axes.length; i < len; i++) {
+                var axis = axes[i];
+                var projection1 = polygon.project(axis);
+                var projection2 = this.project(axis);
+                if (!projection1.overlaps(projection2)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        move: function (x, y) {
+            this.x = x;
+            this.y = y;
+            for (var j = 0, len = this.origin.persistencePoints.length; j < len; j++) {
+                this.origin.points[j] = {
+                    x: this.origin.persistencePoints[j].x + x - this.origin.x,
+                    y: this.origin.persistencePoints[j].y + y - this.origin.y
+                };
+            }
+            var points = this.origin.points;
+            var minX = Number.MAX_VALUE;
+            var maxX = Number.MIN_VALUE;
+            var minY = Number.MAX_VALUE;
+            var maxY = Number.MIN_VALUE;
+            for (var i = 0, pLen = points.length; i < pLen; i++) {
+                if (points[i].x < minX) {
+                    minX = points[i].x;
+                }
+                if (points[i].x > maxX) {
+                    maxX = points[i].x;
+                }
+                if (points[i].y < minY) {
+                    minY = points[i].y;
+                }
+                if (points[i].y > maxY) {
+                    maxY = points[i].y;
+                }
+            }
+            this.cx = minX + (maxX - minX) / 2;
+            this.cy = minY + (maxY - minY) / 2;
+            this.getOriginBounds();
+            return this;
+        },
+        render: function (ctx) {
+            ctx.save();
+            ctx.fillStyle = this.fillStyle;
+            ctx.strokeStyle = this.strokeStyle;
+            ctx.globalAlpha = this.alpha;
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            this.matrix.rotate(this.angle);
+            this.matrix.scale(this.scaleX, this.scaleY);
+            this.matrix.translate(-this.cx, -this.cy);
+            this.generatePoints();
+            this.getBounds();
+            this.createPath(ctx);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+            this.debugRender(ctx);
+            return this;
+        },
+        debugRender: function (ctx) {
+            if (this.debug) {
+                ctx.save();
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.width, this.bounds.height);
+                if (this.points.length) {
+                    ctx.strokeStyle = '#f00';
+                    ctx.beginPath();
+                    this.createPath(ctx);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+    };
+    util.inherits(Polygon, DisplayObject);
+    return Polygon;
 });
 var ig = require('ig');
 
@@ -4373,6 +4746,28 @@ else {
     }
 }
 
+var modName = 'ig/BitmapPolygon';
+var refName = 'BitmapPolygon';
+var folderName = '';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
 var modName = 'ig/ResourceLoader';
 var refName = '';
 var folderName = '';
@@ -4483,28 +4878,6 @@ else {
     }
 }
 
-var modName = 'ig/Rectangle';
-var refName = '';
-var folderName = '';
-
-var tmp;
-if (folderName) {
-    if (!ig[folderName]) {
-        tmp = {};
-        tmp[refName] = require(modName);
-        ig[folderName] = tmp;
-    }
-    else {
-        ig[folderName][refName] = require(modName);
-    }
-}
-else {
-    tmp = require(modName);
-    if (refName) {
-        ig[refName] = tmp;
-    }
-}
-
 var modName = 'ig/particle/Particle';
 var refName = '';
 var folderName = '';
@@ -4552,6 +4925,50 @@ else {
 var modName = 'ig/particle/ParticleEffect';
 var refName = 'ParticleEffect';
 var folderName = 'particle';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
+var modName = 'ig/Rectangle';
+var refName = 'Rectangle';
+var folderName = '';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
+var modName = 'ig/Polygon';
+var refName = 'Polygon';
+var folderName = '';
 
 var tmp;
 if (folderName) {
