@@ -142,6 +142,20 @@ define(function (require) {
          */
         normal: function () {
             return this.perpendicular(true).normalize();
+        },
+
+        /**
+         * 向量向某个方向缩放
+         * @param  {Vector} out   输出向量
+         * @param  {Vector} a     处理向量
+         * @param  {Vector} b     缩放方向
+         * @param  {number} scale 范围
+         * @return {Vector}       out
+         */
+        scaleAndAdd: function (out, a, b, scale) {
+            out.x = a.x + (b.x * scale);
+            out.y = a.y + (b.y * scale);
+            return out;
         }
     };
 

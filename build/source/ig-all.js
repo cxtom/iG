@@ -1843,6 +1843,11 @@ define('ig/Vector', ['require'], function (require) {
         },
         normal: function () {
             return this.perpendicular(true).normalize();
+        },
+        scaleAndAdd: function (out, a, b, scale) {
+            out.x = a.x + b.x * scale;
+            out.y = a.y + b.y * scale;
+            return out;
         }
     };
     return Vector;
@@ -3892,6 +3897,214 @@ define('ig/Rectangle', [
     };
     util.inherits(Rectangle, DisplayObject);
     return Rectangle;
+});'use strict';
+define('ig/particle/Particle', [
+    'require',
+    '../util',
+    '../Vector'
+], function (require) {
+    var util = require('../util');
+    var Vector = require('../Vector');
+    function Particle(opts) {
+        this.position = new Vector();
+        this.velocity = new Vector();
+        util.extend(true, this, {
+            life: 1,
+            age: 0,
+            shape: null
+        });
+        return this;
+    }
+    Particle.prototype = {
+        setVelocity: function (v) {
+            this.velocity.x = v.x;
+            this.velocity.y = v.y;
+            return this;
+        },
+        setPosition: function (pos) {
+            this.position.x = pos.x;
+            this.position.y = pos.y;
+        },
+        update: function (dt) {
+            if (this.velocity) {
+                this.velocity.scaleAndAdd(this.position, this.position, this.velocity, dt);
+            }
+        }
+    };
+    return Particle;
+});'use strict';
+define('ig/particle/Emitter', [
+    'require',
+    '../util',
+    '../Vector',
+    './Particle'
+], function (require) {
+    var util = require('../util');
+    var Vector = require('../Vector');
+    var Particle = require('./Particle');
+    function Emitter(options, createShape) {
+        util.extend(true, this, {
+            max: 1000,
+            amount: 15,
+            life: null,
+            position: null,
+            velocity: null,
+            _particlePool: []
+        }, options);
+        this._particlePool = [];
+        for (var i = 0; i < this.max; i++) {
+            var particle = new Particle(options);
+            particle.emitter = this;
+            particle.shape = createShape();
+            this._particlePool.push(particle);
+        }
+    }
+    Emitter.prototype = {
+        init: function (createShape) {
+            for (var i = 0; i < this.max; i++) {
+                var particle = new Particle(options);
+                particle.emitter = this;
+                particle.shape = createShape();
+                this._particlePool.push(particle);
+            }
+            return this;
+        },
+        emit: function (out) {
+            var amount = Math.min(this._particlePool.length, this.amount);
+            for (var i = 0; i < amount; i++) {
+                var particle = this._particlePool.pop();
+                if (this.position) {
+                    particle.setPosition(this.position);
+                }
+                if (this.velocity) {
+                    particle.setVelocity(this.velocity);
+                }
+                if (this.life) {
+                    particle.life = this.life;
+                }
+                particle.age = 0;
+                out.push(particle);
+            }
+        },
+        kill: function (particle) {
+            this._particlePool.push(particle);
+        }
+    };
+    return Emitter;
+});define('ig/particle/ParticleEffect', [
+    'require',
+    '../Vector'
+], function (require) {
+    var Vector = require('../Vector');
+    function ForceField(x, y) {
+        x = x || 0;
+        y = y || x || 0;
+        this.force = new Vector(x, y);
+    }
+    ForceField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
+        velocity.scaleAndAdd(velocity, velocity, this.force, deltaTime);
+    };
+    function BoxCollision(rect) {
+        this.rect = rect || [
+            [
+                0,
+                0
+            ],
+            [
+                100,
+                100
+            ]
+        ];
+    }
+    BoxCollision.prototype.applyTo = function (velocity, position, weight, deltaTime) {
+        var rect = this.rect;
+        var min = rect[0];
+        var max = rect[1];
+        if (position.x < min[0] || position.x > max[0]) {
+            velocity.x = -velocity.x * 0.6;
+        }
+        if (position.y < min[1] || position.y > max[1]) {
+            velocity.y = -velocity.y * 0.6;
+        }
+    };
+    function RepulsiveField(center, k) {
+        this.center = center;
+        this.k = k;
+    }
+    RepulsiveField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
+        var v = position.sub(this.center, true);
+        var l = v.getMagnitude();
+        var k = this.k;
+        var f = k / l;
+        Vector.scaleAndAdd(velocity, velocity, v, f / l);
+    };
+    function ParticleEffect() {
+        this._particles = [];
+        this._effectors = [];
+        this._emitters = [];
+        this._elapsedTime = 0;
+        this._emitting = true;
+        return this;
+    }
+    ParticleEffect.prototype = {
+        addEmitter: function (emitter) {
+            this._emitters.push(emitter);
+            return this;
+        },
+        addEffector: function (effector) {
+            this._effectors.push(effector);
+            return this;
+        },
+        update: function (deltaTime) {
+            var i;
+            deltaTime /= 1000;
+            this._elapsedTime += deltaTime;
+            var particles = this._particles;
+            if (this._emitting) {
+                for (i = 0; i < this._emitters.length; i++) {
+                    this._emitters[i].emit(particles);
+                }
+                if (this.oneshot) {
+                    this._emitting = false;
+                }
+            }
+            var shapeList = [];
+            var len = particles.length;
+            var p;
+            for (i = 0; i < len;) {
+                p = particles[i];
+                p.age += deltaTime;
+                if (p.age >= p.life) {
+                    p.emitter.kill(p);
+                    particles[i] = particles[len - 1];
+                    particles.pop();
+                    len--;
+                } else {
+                    shapeList.push(p.shape);
+                    i++;
+                }
+            }
+            for (i = 0; i < len; i++) {
+                p = particles[i];
+                if (this._effectors.length > 0) {
+                    for (var j = 0; j < this._effectors.length; j++) {
+                        this._effectors[j].applyTo(p.velocity, p.position, p.weight, deltaTime);
+                    }
+                }
+                p.update(deltaTime);
+                var shape = p.shape;
+                if (shape) {
+                    shape.x = p.position.x;
+                    shape.y = p.position.y;
+                }
+            }
+            return particles;
+        }
+    };
+    ParticleEffect.ForceField = ForceField;
+    ParticleEffect.BoxCollision = BoxCollision;
+    ParticleEffect.RepulsiveField = RepulsiveField;
+    return ParticleEffect;
 });
 var ig = require('ig');
 
@@ -4273,6 +4486,72 @@ else {
 var modName = 'ig/Rectangle';
 var refName = '';
 var folderName = '';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
+var modName = 'ig/particle/Particle';
+var refName = '';
+var folderName = '';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
+var modName = 'ig/particle/Emitter';
+var refName = 'Emitter';
+var folderName = 'particle';
+
+var tmp;
+if (folderName) {
+    if (!ig[folderName]) {
+        tmp = {};
+        tmp[refName] = require(modName);
+        ig[folderName] = tmp;
+    }
+    else {
+        ig[folderName][refName] = require(modName);
+    }
+}
+else {
+    tmp = require(modName);
+    if (refName) {
+        ig[refName] = tmp;
+    }
+}
+
+var modName = 'ig/particle/ParticleEffect';
+var refName = 'ParticleEffect';
+var folderName = 'particle';
 
 var tmp;
 if (folderName) {

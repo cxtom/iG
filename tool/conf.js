@@ -23,7 +23,10 @@ exports.modules = {
         {name: 'ig/domEvt'},
 
         {name: 'ig/Projection'},
-        {name: 'ig/Rectangle'}
+        {name: 'ig/Rectangle'},
+        {name: 'ig/particle/Particle'},
+        {name: 'ig/particle/Emitter', refName: 'Emitter', folder: 'particle'},
+        {name: 'ig/particle/ParticleEffect', refName: 'ParticleEffect', folder: 'particle'}
 
 
         // refName 指要挂载到 window.ig 这个全局空间上的名字
