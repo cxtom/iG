@@ -1056,6 +1056,7 @@ define('ig/dep/howler', ['require'], function (require) {
 define('ig/util', ['require'], function (require) {
     var DEG2RAD_OPERAND = Math.PI / 180;
     var RAD2DEG_OPERAND = 180 / Math.PI;
+    var PROP_CLASS_POOL_ATTR = '__classess__';
     var objectProto = Object.prototype;
     var exports = {};
     exports.noop = function () {
@@ -1142,6 +1143,13 @@ define('ig/util', ['require'], function (require) {
         }
         subClass.prototype.constructor = subClass;
         subClass.superClass = superClass.prototype;
+        var subClassName = proto.$class;
+        if (subClassName) {
+            if (!superClass[PROP_CLASS_POOL_ATTR]) {
+                superClass[PROP_CLASS_POOL_ATTR] = {};
+            }
+            superClass[PROP_CLASS_POOL_ATTR][subClassName] = subClass;
+        }
         return subClass;
     };
     exports.throttle = function (func, wait, options) {
@@ -1282,6 +1290,10 @@ define('ig/util', ['require'], function (require) {
             x: x,
             y: y
         };
+    };
+    exports.getClass = function (Class, subClassType) {
+        var pool = Class[PROP_CLASS_POOL_ATTR];
+        return pool[subClassType];
     };
     return exports;
 });'use strict';
@@ -1790,7 +1802,7 @@ define('ig/Vector', ['require'], function (require) {
     var pow = Math.pow;
     function Vector(x, y) {
         this.x = x || 0;
-        this.y = y || x || 0;
+        this.y = y === 0 ? 0 : y || x || 0;
     }
     Vector.prototype = {
         constructor: Vector,
@@ -1844,10 +1856,10 @@ define('ig/Vector', ['require'], function (require) {
         normal: function () {
             return this.perpendicular(true).normalize();
         },
-        scaleAndAdd: function (out, a, b, scale) {
-            out.x = a.x + b.x * scale;
-            out.y = a.y + b.y * scale;
-            return out;
+        scaleAndAdd: function (b, scale) {
+            this.x = this.x + b.x * scale;
+            this.y = this.y + b.y * scale;
+            return this;
         }
     };
     return Vector;
@@ -3865,6 +3877,7 @@ define('ig/particle/Particle', [
     function Particle(opts) {
         this.position = new Vector();
         this.velocity = new Vector();
+        this.accelerate = new Vector();
         util.extend(true, this, {
             life: 1,
             age: 0,
@@ -3882,9 +3895,16 @@ define('ig/particle/Particle', [
             this.position.x = pos.x;
             this.position.y = pos.y;
         },
+        setAccelerate: function (a) {
+            this.accelerate.x = a.x;
+            this.accelerate.y = a.y;
+        },
         update: function (dt) {
+            if (this.accelerate) {
+                this.velocity.scaleAndAdd(this.accelerate, dt);
+            }
             if (this.velocity) {
-                this.velocity.scaleAndAdd(this.position, this.position, this.velocity, dt);
+                this.position.scaleAndAdd(this.velocity, dt);
             }
         }
     };
@@ -3893,12 +3913,73 @@ define('ig/particle/Particle', [
 define('ig/particle/Emitter', [
     'require',
     '../util',
-    '../Vector',
-    './Particle'
+    './Particle',
+    '../Vector'
 ], function (require) {
     var util = require('../util');
-    var Vector = require('../Vector');
     var Particle = require('./Particle');
+    var Vector = require('../Vector');
+    var scale = {
+        setPosition: function (option, particle) {
+            if (util.isType('object', option) && option.hasOwnProperty('type') && option.hasOwnProperty('value')) {
+                switch (option.type) {
+                case 'point':
+                    if (option.value instanceof Vector) {
+                        particle.setPosition(option.value);
+                        break;
+                    }
+                case 'rectangle':
+                    if (util.isType('array', option.value)) {
+                        var min = option.value[0];
+                        var max = option.value[1];
+                        particle.setPosition(new Vector(util.randomFloat(min[0] || 0, max[0] || 0), util.randomFloat(min[1] || 0, max[1] || 0)));
+                        break;
+                    }
+                case 'circle':
+                    if (option.value.hasOwnProperty('center') && option.value.hasOwnProperty('radius') && option.value.center instanceof Vector && util.isType('number', option.value.radius)) {
+                        var r = option.value.radius;
+                        var v = new Vector(util.randomFloat(-r, r), util.randomFloat(-r, r));
+                        particle.setPosition(v.scaleAndAdd(option.value.center, 1));
+                        break;
+                    }
+                default:
+                    particle.setPosition(new Vector());
+                }
+            } else if (util.isType('function', option)) {
+                option(particle);
+            } else if (option instanceof Vector) {
+                particle.setPosition(option);
+            } else {
+                particle.setPosition(new Vector());
+            }
+        },
+        setVelocity: function (option, particle) {
+            if (option instanceof Vector) {
+                particle.setVelocity(option);
+            } else if (option instanceof Array) {
+                var min = option[0];
+                var max = option[1];
+                particle.setVelocity(new Vector(util.randomFloat(min[0] || 0, max[0] || 0), util.randomFloat(min[1] || 0, max[1] || 0)));
+            } else if (util.isType('function', option)) {
+                option(particle);
+            } else {
+                particle.setVelocity(new Vector());
+            }
+        },
+        setAccelerate: function (option, particle) {
+            if (option instanceof Vector) {
+                particle.setAccelerate(option);
+            } else if (option instanceof Array) {
+                var min = option[0];
+                var max = option[1];
+                particle.setAccelerate(new Vector(util.randomFloat(min[0] || 0, max[0] || 0), util.randomFloat(min[1] || 0, max[1] || 0)));
+            } else if (util.isType('function', option)) {
+                option(particle);
+            } else {
+                particle.setAccelerate(new Vector());
+            }
+        }
+    };
     function Emitter(options, createShape) {
         util.extend(true, this, {
             max: 1000,
@@ -3906,6 +3987,7 @@ define('ig/particle/Emitter', [
             life: null,
             position: null,
             velocity: null,
+            accelerate: null,
             _particlePool: []
         }, options);
         this._particlePool = [];
@@ -3918,11 +4000,9 @@ define('ig/particle/Emitter', [
     }
     Emitter.prototype = {
         init: function (createShape) {
-            for (var i = 0; i < this.max; i++) {
-                var particle = new Particle(options);
-                particle.emitter = this;
-                particle.shape = createShape();
-                this._particlePool.push(particle);
+            for (var i = 0; i < this._particlePool.length; i++) {
+                this._particlePool[i].shape = createShape();
+                this._particlePool.push(this._particlePool[i]);
             }
             return this;
         },
@@ -3931,10 +4011,13 @@ define('ig/particle/Emitter', [
             for (var i = 0; i < amount; i++) {
                 var particle = this._particlePool.pop();
                 if (this.position) {
-                    particle.setPosition(this.position);
+                    scale.setPosition(this.position, particle);
                 }
                 if (this.velocity) {
-                    particle.setVelocity(this.velocity);
+                    scale.setVelocity(this.velocity, particle);
+                }
+                if (this.accelerate) {
+                    scale.setAccelerate(this.accelerate, particle);
                 }
                 if (this.life) {
                     particle.life = this.life;
@@ -3950,19 +4033,29 @@ define('ig/particle/Emitter', [
     return Emitter;
 });define('ig/particle/ParticleEffect', [
     'require',
-    '../Vector'
+    '../Vector',
+    '../util'
 ], function (require) {
     var Vector = require('../Vector');
-    function ForceField(x, y) {
-        x = x || 0;
-        y = y || x || 0;
+    var u = require('../util');
+    function Effect() {
+    }
+    Effect.prototype.applyTo = function (velocity, position, weight, deltaTime) {
+    };
+    function ForceField(opts) {
+        var x = opts.x || 0;
+        var y = opts.y || opts.x || 0;
         this.force = new Vector(x, y);
     }
-    ForceField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        velocity.scaleAndAdd(velocity, velocity, this.force, deltaTime);
+    ForceField.prototype = {
+        $class: 'ForceField',
+        applyTo: function (velocity, position, weight, deltaTime) {
+            velocity.scaleAndAdd(this.force, deltaTime);
+        }
     };
-    function BoxCollision(rect) {
-        this.rect = rect || [
+    u.inherits(ForceField, Effect);
+    function BoxCollision(opts) {
+        this.rect = opts.rect || [
             [
                 0,
                 0
@@ -3972,29 +4065,38 @@ define('ig/particle/Emitter', [
                 100
             ]
         ];
+        this.k = opts.k || 0.6;
     }
-    BoxCollision.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        var rect = this.rect;
-        var min = rect[0];
-        var max = rect[1];
-        if (position.x < min[0] || position.x > max[0]) {
-            velocity.x = -velocity.x * 0.6;
-        }
-        if (position.y < min[1] || position.y > max[1]) {
-            velocity.y = -velocity.y * 0.6;
+    BoxCollision.prototype = {
+        $class: 'BoxCollision',
+        applyTo: function (velocity, position, weight, deltaTime) {
+            var rect = this.rect;
+            var min = rect[0];
+            var max = rect[1];
+            if (position.x < min[0] && velocity.x <= 0 || position.x > max[0] && velocity.x > 0) {
+                velocity.x = -velocity.x * this.k;
+            }
+            if (position.y < min[1] && velocity.y <= 0 || position.y > max[1] && velocity.y > 0) {
+                velocity.y = -velocity.y * this.k;
+            }
         }
     };
-    function RepulsiveField(center, k) {
-        this.center = center;
-        this.k = k;
+    u.inherits(BoxCollision, Effect);
+    function RepulsiveField(opts) {
+        this.center = opts.center;
+        this.k = opts.k;
     }
-    RepulsiveField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        var v = position.sub(this.center, true);
-        var l = v.getMagnitude();
-        var k = this.k;
-        var f = k / l;
-        Vector.scaleAndAdd(velocity, velocity, v, f / l);
+    RepulsiveField.prototype = {
+        $class: 'RepulsiveField',
+        applyTo: function (velocity, position, weight, deltaTime) {
+            var v = position.sub(this.center, true);
+            var l = v.getMagnitude();
+            var k = this.k;
+            var f = k / l;
+            velocity.scaleAndAdd(v, f / l);
+        }
     };
+    u.inherits(RepulsiveField, Effect);
     function ParticleEffect() {
         this._particles = [];
         this._effectors = [];
@@ -4008,8 +4110,18 @@ define('ig/particle/Emitter', [
             this._emitters.push(emitter);
             return this;
         },
-        addEffector: function (effector) {
-            this._effectors.push(effector);
+        addEffector: function (conf) {
+            var effector;
+            if (conf instanceof Effect) {
+                effector = conf;
+            } else if (u.isType('object', conf)) {
+                var EffectClass = u.getClass(Effect, conf.type);
+                var options = conf.options || {};
+                effector = new EffectClass(options);
+            }
+            if (effector) {
+                this._effectors.push(effector);
+            }
             return this;
         },
         update: function (deltaTime) {

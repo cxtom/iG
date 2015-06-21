@@ -20,7 +20,7 @@ define(function (require) {
      */
     function Vector(x, y) {
         this.x = x || 0;
-        this.y = y || x || 0;
+        this.y = y === 0 ? 0 : y || x || 0;
     }
 
     Vector.prototype = {
@@ -146,16 +146,14 @@ define(function (require) {
 
         /**
          * 向量向某个方向缩放
-         * @param  {Vector} out   输出向量
-         * @param  {Vector} a     处理向量
          * @param  {Vector} b     缩放方向
          * @param  {number} scale 范围
          * @return {Vector}       out
          */
-        scaleAndAdd: function (out, a, b, scale) {
-            out.x = a.x + (b.x * scale);
-            out.y = a.y + (b.y * scale);
-            return out;
+        scaleAndAdd: function (b, scale) {
+            this.x = this.x + (b.x * scale);
+            this.y = this.y + (b.y * scale);
+            return this;
         }
     };
 

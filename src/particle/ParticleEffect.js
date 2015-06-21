@@ -6,46 +6,74 @@
 define(function (require) {
 
     var Vector = require('../Vector');
+    var u = require('../util');
 
-    function ForceField(x, y) {
-        x = x || 0;
-        y = y || x || 0;
+    function Effect() {}
+
+    Effect.prototype.applyTo = function (velocity, position, weight, deltaTime) {
+
+    };
+
+    function ForceField(opts) {
+        var x = opts.x || 0;
+        var y = opts.y || opts.x || 0;
         this.force = new Vector(x, y);
     }
 
-    ForceField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        velocity.scaleAndAdd(velocity, velocity, this.force, deltaTime);
-    };
+    ForceField.prototype = {
+        $class: 'ForceField',
 
-    function BoxCollision(rect) {
-        this.rect = rect || [[0, 0], [100, 100]];
-    }
-
-    BoxCollision.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        var rect = this.rect;
-        var min = rect[0];
-        var max = rect[1];
-
-        if (position.x < min[0] || position.x > max[0]) {
-            velocity.x = -velocity.x * 0.6;
-        }
-        if (position.y < min[1] || position.y > max[1]) {
-            velocity.y = -velocity.y * 0.6;
+        applyTo: function (velocity, position, weight, deltaTime) {
+            velocity.scaleAndAdd(this.force, deltaTime);
         }
     };
 
-    function RepulsiveField(center, k) {
-        this.center = center;
-        this.k = k;
+    u.inherits(ForceField, Effect);
+
+    function BoxCollision(opts) {
+        this.rect = opts.rect || [[0, 0], [100, 100]];
+        this.k = opts.k || 0.6;
     }
 
-    RepulsiveField.prototype.applyTo = function (velocity, position, weight, deltaTime) {
-        var v = position.sub(this.center, true);
-        var l = v.getMagnitude();
-        var k = this.k;
-        var f = k / l;
-        Vector.scaleAndAdd(velocity, velocity, v, f / l);
+    BoxCollision.prototype = {
+        $class: 'BoxCollision',
+
+        applyTo: function (velocity, position, weight, deltaTime) {
+            var rect = this.rect;
+            var min = rect[0];
+            var max = rect[1];
+
+            if ((position.x < min[0] && velocity.x <= 0)
+                || (position.x > max[0] && velocity.x > 0)) {
+                velocity.x = -velocity.x * this.k;
+            }
+            if ((position.y < min[1] && velocity.y <= 0)
+                || (position.y > max[1] && velocity.y > 0)) {
+                velocity.y = -velocity.y * this.k;
+            }
+        }
     };
+
+    u.inherits(BoxCollision, Effect);
+
+    function RepulsiveField(opts) {
+        this.center = opts.center;
+        this.k = opts.k;
+    }
+
+    RepulsiveField.prototype = {
+        $class: 'RepulsiveField',
+
+        applyTo: function (velocity, position, weight, deltaTime) {
+            var v = position.sub(this.center, true);
+            var l = v.getMagnitude();
+            var k = this.k;
+            var f = k / l;
+            velocity.scaleAndAdd(v, f / l);
+        }
+    };
+
+    u.inherits(RepulsiveField, Effect);
 
     function ParticleEffect() {
 
@@ -66,8 +94,22 @@ define(function (require) {
             return this;
         },
 
-        addEffector: function (effector) {
-            this._effectors.push(effector);
+        addEffector: function (conf) {
+            var effector;
+            if (conf instanceof Effect) {
+                effector = conf;
+            }
+            // 如果是一个对象, 那按这个格式来解析
+            // {type: 'EffectClassName', options: { ... }}
+            else if (u.isType('object', conf)) {
+                var EffectClass = u.getClass(Effect, conf.type);
+                var options = conf.options || {};
+                effector = new EffectClass(options);
+            }
+
+            if (effector) {
+                this._effectors.push(effector);
+            }
 
             return this;
         },

@@ -39,7 +39,7 @@ window.onload = function () {
 
     var canvas = document.querySelector('canvas');
     canvas.height = 400;
-    canvas.width  = 500;
+    canvas.width  = 800;
     var ctx = canvas.getContext('2d');
 
     function createCircle() {
@@ -50,7 +50,7 @@ window.onload = function () {
             vy: 0,
             ax: 0,
             ay: 0,
-            radius: 5,
+            radius: 2,
             ctx: ctx
         });
         circle.draw();
@@ -61,33 +61,101 @@ window.onload = function () {
     var Emitter        = ig.particle.Emitter;
     var ParticleEffect = ig.particle.ParticleEffect;
 
-    var emitter = new Emitter({
-        max: 40,
-        amount: 1,
-        life: 1,
-        position: new ig.Vector(10, 30),
-        velocity: new ig.Vector(500, 400)
-    }, createCircle);
-
-    var parcsys = new ParticleEffect();
-    parcsys.addEmitter(emitter);
-
-    var ForceField = ParticleEffect.ForceField;
-    // parcsys.addEffector(new ForceField(new ig.Vector(0, 300)));
+    var emitter;
+    var parcsys;
+    var particles;
 
     document.querySelector('#simple').onclick = function () {
-        var particles;
+
+        emitter = new Emitter({
+            max: 40,
+            amount: 1,
+            life: 1,
+            position: new ig.Vector(10, 30),
+            velocity: new ig.Vector(500, 0)
+        }, createCircle);
+
+        parcsys = new ParticleEffect();
+        parcsys.addEmitter(emitter);
+
         ig.loop({
             step: function (dt, stepCount, requestID) {
                 particles = parcsys.update(dt * 18);
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                 for (var i = 0; i < particles.length; i++) {
                     particles[i].shape.draw();
-                    // console.log({x: particles[i].shape.x, y: particles[i].shape.y});
                 }
             },
-            exec: function (execCount) {
+            jumpFrames: 0
+        });
+    };
 
+    document.querySelector('#acc').onclick = function () {
+
+        emitter = new Emitter({
+            max: 1500,
+            amount: 50,
+            life: 50,
+            position: {
+                type: 'rectangle',
+                value: [[10, 10], [20, 20]]
+            },
+            velocity: [[100, 0], [100, 200]],
+            accelerate: null
+        }, createCircle);
+
+        parcsys = new ParticleEffect();
+        parcsys.addEmitter(emitter);
+
+        parcsys
+            .addEffector({
+                type: 'RepulsiveField',
+                options: {
+                    center: new ig.Vector(200, 200),
+                    k: 1000
+                }
+            })
+            .addEffector({
+                type: 'RepulsiveField',
+                options: {
+                    center: new ig.Vector(600, 200),
+                    k: -1000
+                }
+            })
+            .addEffector({
+                type: 'BoxCollision',
+                options: {
+                    rect: [[0, 0], [800, 400]],
+                    k: 0.6
+                }
+            });
+
+        ig.loop({
+            step: function (dt, stepCount, requestID) {
+                // if (stepCount % 10 === 0) {
+                particles = parcsys.update(dt * 60);
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                for (var i = 0; i < particles.length; i++) {
+                    particles[i].shape.draw();
+                }
+
+                var circle1 = new Circle({
+                    x: 200,
+                    y: 200,
+                    radius: 5,
+                    ctx: ctx
+                });
+                circle1.draw();
+
+                var circle2 = new Circle({
+                    x: 600,
+                    y: 200,
+                    radius: 5,
+                    ctx: ctx
+                });
+                circle2.draw();
+                // console.log(particles[0].age);
+               // }
             },
             jumpFrames: 0
         });

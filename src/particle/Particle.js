@@ -23,6 +23,7 @@ define(function (require) {
 
         this.position = new Vector();
         this.velocity = new Vector();
+        this.accelerate = new Vector();
 
         util.extend(true, this, {
             life: 1,
@@ -55,9 +56,17 @@ define(function (require) {
             this.position.y = pos.y;
         },
 
+        setAccelerate: function (a) {
+            this.accelerate.x = a.x;
+            this.accelerate.y = a.y;
+        },
+
         update: function (dt) {
+            if (this.accelerate) {
+                this.velocity.scaleAndAdd(this.accelerate, dt);
+            }
             if (this.velocity) {
-                this.velocity.scaleAndAdd(this.position, this.position, this.velocity, dt);
+                this.position.scaleAndAdd(this.velocity, dt);
             }
         }
     };

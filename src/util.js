@@ -9,6 +9,7 @@ define(function (require) {
 
     var DEG2RAD_OPERAND = Math.PI / 180;
     var RAD2DEG_OPERAND = 180 / Math.PI;
+    var PROP_CLASS_POOL_ATTR = '__classess__';
 
     var objectProto = Object.prototype;
 
@@ -164,6 +165,14 @@ define(function (require) {
         subClass.prototype.constructor = subClass;
 
         subClass.superClass = superClass.prototype;
+
+        var subClassName = proto.$class;
+        if (subClassName) {
+            if (!superClass[PROP_CLASS_POOL_ATTR]) {
+                superClass[PROP_CLASS_POOL_ATTR] = {};
+            }
+            superClass[PROP_CLASS_POOL_ATTR][subClassName] = subClass;
+        }
 
         return subClass;
     };
@@ -441,6 +450,17 @@ define(function (require) {
             x: x,
             y: y
         };
+    };
+
+    /**
+     * 获取Class的某个派生类
+     * @param  {Function} Class      类
+     * @param  {string} subClassType 派生类名
+     * @return {Function}
+     */
+    exports.getClass = function (Class, subClassType) {
+        var pool = Class[PROP_CLASS_POOL_ATTR];
+        return pool[subClassType];
     };
 
     return exports;
