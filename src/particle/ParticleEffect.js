@@ -117,8 +117,6 @@ define(function (require) {
         update: function (deltaTime) {
 
             var i;
-            // MS => Seconds
-            deltaTime /= 1000;
             this._elapsedTime += deltaTime;
 
             var particles = this._particles;
@@ -172,10 +170,6 @@ define(function (require) {
             return particles;
         }
     };
-
-    ParticleEffect.ForceField = ForceField;
-    ParticleEffect.BoxCollision = BoxCollision;
-    ParticleEffect.RepulsiveField = RepulsiveField;
 
     return ParticleEffect;
 });

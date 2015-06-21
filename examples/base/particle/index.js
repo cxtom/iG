@@ -100,7 +100,7 @@ window.onload = function () {
                 type: 'rectangle',
                 value: [[10, 10], [20, 20]]
             },
-            velocity: [[100, 0], [100, 200]],
+            velocity: [[1, 0], [1, 2]],
             accelerate: null
         }, createCircle);
 
@@ -112,14 +112,14 @@ window.onload = function () {
                 type: 'RepulsiveField',
                 options: {
                     center: new ig.Vector(200, 200),
-                    k: 1000
+                    k: 1
                 }
             })
             .addEffector({
                 type: 'RepulsiveField',
                 options: {
                     center: new ig.Vector(600, 200),
-                    k: -1000
+                    k: -1
                 }
             })
             .addEffector({
@@ -133,7 +133,7 @@ window.onload = function () {
         ig.loop({
             step: function (dt, stepCount, requestID) {
                 // if (stepCount % 10 === 0) {
-                particles = parcsys.update(dt * 60);
+                particles = parcsys.update(dt);
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                 for (var i = 0; i < particles.length; i++) {
                     particles[i].shape.draw();
