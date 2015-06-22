@@ -59,7 +59,7 @@ window.onload = function () {
     }
 
     var Emitter        = ig.particle.Emitter;
-    var ParticleEffect = ig.particle.ParticleEffect;
+    var ParticleSystem = ig.particle.ParticleSystem;
 
     var emitter;
     var parcsys;
@@ -75,7 +75,7 @@ window.onload = function () {
             velocity: new ig.Vector(500, 0)
         }, createCircle);
 
-        parcsys = new ParticleEffect();
+        parcsys = new ParticleSystem();
         parcsys.addEmitter(emitter);
 
         ig.loop({
@@ -93,18 +93,18 @@ window.onload = function () {
     document.querySelector('#acc').onclick = function () {
 
         emitter = new Emitter({
-            max: 1500,
-            amount: 50,
-            life: 50,
+            max: 1000,
+            amount: 15,
+            life: 1500,
             position: {
                 type: 'rectangle',
-                value: [[10, 10], [20, 20]]
+                value: [[0, 0], [800, 0]]
             },
-            velocity: [[1, 0], [1, 2]],
-            accelerate: null
+            velocity: [[0, 1], [0, 2]],
+            accelerate: ig.Vector(0, 0.5)
         }, createCircle);
 
-        parcsys = new ParticleEffect();
+        parcsys = new ParticleSystem();
         parcsys.addEmitter(emitter);
 
         parcsys
@@ -112,14 +112,14 @@ window.onload = function () {
                 type: 'RepulsiveField',
                 options: {
                     center: new ig.Vector(200, 200),
-                    k: 1
+                    k: 5
                 }
             })
             .addEffector({
                 type: 'RepulsiveField',
                 options: {
                     center: new ig.Vector(600, 200),
-                    k: -1
+                    k: -5
                 }
             })
             .addEffector({

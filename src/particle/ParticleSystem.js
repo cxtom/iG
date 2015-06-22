@@ -75,7 +75,7 @@ define(function (require) {
 
     u.inherits(RepulsiveField, Effect);
 
-    function ParticleEffect() {
+    function ParticleSystem() {
 
         this._particles = [];
         this._effectors = [];
@@ -86,7 +86,7 @@ define(function (require) {
         return this;
     }
 
-    ParticleEffect.prototype = {
+    ParticleSystem.prototype = {
 
         addEmitter: function (emitter) {
             this._emitters.push(emitter);
@@ -168,8 +168,15 @@ define(function (require) {
             }
 
             return particles;
+        },
+
+        dispose: function () {
+            this._particles = [];
+            this._effectors = [];
+            this._emitters = [];
+            this._elapsedTime = 0;
         }
     };
 
-    return ParticleEffect;
+    return ParticleSystem;
 });

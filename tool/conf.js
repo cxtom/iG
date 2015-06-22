@@ -27,7 +27,7 @@ exports.modules = {
 
         {name: 'ig/particle/Particle'},
         {name: 'ig/particle/Emitter', refName: 'Emitter', folder: 'particle'},
-        {name: 'ig/particle/ParticleEffect', refName: 'ParticleEffect', folder: 'particle'},
+        {name: 'ig/particle/ParticleSystem', refName: 'ParticleSystem', folder: 'particle'},
 
         {name: 'ig/Rectangle', refName: 'Rectangle'},
         {name: 'ig/Polygon', refName: 'Polygon'}

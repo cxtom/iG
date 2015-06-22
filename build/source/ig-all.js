@@ -4031,7 +4031,7 @@ define('ig/particle/Emitter', [
         }
     };
     return Emitter;
-});define('ig/particle/ParticleEffect', [
+});define('ig/particle/ParticleSystem', [
     'require',
     '../Vector',
     '../util'
@@ -4097,7 +4097,7 @@ define('ig/particle/Emitter', [
         }
     };
     u.inherits(RepulsiveField, Effect);
-    function ParticleEffect() {
+    function ParticleSystem() {
         this._particles = [];
         this._effectors = [];
         this._emitters = [];
@@ -4105,7 +4105,7 @@ define('ig/particle/Emitter', [
         this._emitting = true;
         return this;
     }
-    ParticleEffect.prototype = {
+    ParticleSystem.prototype = {
         addEmitter: function (emitter) {
             this._emitters.push(emitter);
             return this;
@@ -4126,7 +4126,6 @@ define('ig/particle/Emitter', [
         },
         update: function (deltaTime) {
             var i;
-            deltaTime /= 1000;
             this._elapsedTime += deltaTime;
             var particles = this._particles;
             if (this._emitting) {
@@ -4170,10 +4169,7 @@ define('ig/particle/Emitter', [
             return particles;
         }
     };
-    ParticleEffect.ForceField = ForceField;
-    ParticleEffect.BoxCollision = BoxCollision;
-    ParticleEffect.RepulsiveField = RepulsiveField;
-    return ParticleEffect;
+    return ParticleSystem;
 });'use strict';
 define('ig/Rectangle', [
     'require',
@@ -5034,8 +5030,8 @@ else {
     }
 }
 
-var modName = 'ig/particle/ParticleEffect';
-var refName = 'ParticleEffect';
+var modName = 'ig/particle/ParticleSystem';
+var refName = 'ParticleSystem';
 var folderName = 'particle';
 
 var tmp;
