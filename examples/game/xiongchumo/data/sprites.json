@@ -50,7 +50,7 @@
         "rows": 1,
         "total": 5,
         "tileW": 135,
-        "tileH": 180,
+        "tileH": 170,
         "offsetX": 0,
         "offsetY": 0
     },
@@ -62,28 +62,17 @@
         "total": 6,
         "tileW": 56,
         "tileH": 55,
-        "offsetX": 10,
-        "offsetY": 0
-    },
-    "pineconeWithPlayer": {
-        "sx": 0,
-        "sy": 430,
-        "cols": 1,
-        "rows": 1,
-        "total": 1,
-        "tileW": 70,
-        "tileH": 80,
         "offsetX": 0,
         "offsetY": 0
     },
-    "pineconeWithBear": {
-        "sx": 150,
-        "sy": 430,
-        "cols": 1,
+    "stone": {
+        "sx": 0,
+        "sy": 310,
+        "cols": 6,
         "rows": 1,
-        "total": 1,
-        "tileW": 70,
-        "tileH": 80,
+        "total": 6,
+        "tileW": 65,
+        "tileH": 55,
         "offsetX": 0,
         "offsetY": 0
     }

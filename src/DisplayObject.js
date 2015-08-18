@@ -168,6 +168,20 @@ define(function (require) {
         },
 
         /**
+         * 设置 DisplayObject 实例的 relativeX, relativeY，只有子精灵才会有
+         *
+         * @param {number} x 横坐标
+         * @param {number} y 纵坐标
+         *
+         * @return {Object} DisplayObject 实例
+         */
+        setRelativeXY: function (x, y) {
+            this.relativeX = x;
+            this.relativeY = y;
+            return this;
+        },
+
+        /**
          * 设置状态
          *
          * @param {number} status 状态值
@@ -368,7 +382,7 @@ define(function (require) {
         /**
          * 设置横轴和纵轴缩放倍数
          *
-         * * @param {number} scaleX 横轴缩放倍数
+         * @param {number} scaleX 横轴缩放倍数
          * @param {number} scaleY 纵轴缩放倍数
          *
          * @return {Object} DisplayObject 实例
@@ -416,6 +430,7 @@ define(function (require) {
                 },
                 opts
             );
+
             var stepFunc = util.getType(animOpts.stepFunc) === 'function'
                 ? animOpts.stepFunc
                 : util.noop;
@@ -442,6 +457,49 @@ define(function (require) {
                 }).on('complete', function (d) {
                     completeFunc(d);
                 });
+
+            var childLen = 0;
+            if (Array.isArray(this.children) && (childLen = this.children.length)) {
+                var childAnimOpts = {};
+                if (!this._.isHandleChildren) {
+                    var children = this.children;
+                    this._.isHandleChildren = true;
+
+                    // 实例化 children 的时候，children 的 x, y 是相对于 parent 的 x, y 的
+                    for (var j = 0; j < childLen; j++) {
+                        var child = children[j];
+                        child.setRelativeXY(child.x, child.y);
+                        child.x += this.x;
+                        child.y += this.y;
+                        child.move(child.x, child.y);
+                        child.parent = this;
+                        child.setMatrix(this.matrix.m);
+                    }
+                }
+
+                var target = opts.target || {};
+                var range = opts.range || {};
+                for (var i = 0; i < childLen; i++) {
+                    if (this.children[i].followParent) {
+                        childAnimOpts = util.extend(true, {}, {source: this.children[i]}, opts);
+                        // 子精灵的 x, y 是相对于父精灵的 x, y 来定位的
+                        if (target.x) {
+                            childAnimOpts.target.x += this.children[i].x + this.x;
+                        }
+                        if (target.y) {
+                            childAnimOpts.target.y += this.children[i].y - this.y;
+                        }
+
+                        if (range.x) {
+                            childAnimOpts.range.x += this.children[i].x + this.x;
+                        }
+                        if (range.y) {
+                            childAnimOpts.range.y += this.children[i].y - this.y;
+                        }
+                        this.children[i].animate = new Animation(childAnimOpts).play();
+                    }
+                }
+            }
 
             return this;
         },
@@ -513,9 +571,11 @@ define(function (require) {
          * @param {number} stepCount 每帧中切分出来的每个时间片里执行的函数的计数器
          * @param {number} requestID requestAnimationFrame 标识
          */
+        /* eslint-disable fecs-camelcase */
         _step: function (dt, stepCount, requestID) {
             return this;
         },
+        /* eslint-enable fecs-camelcase */
 
         /**
          * 每帧更新，这个方法应该是由子类重写的

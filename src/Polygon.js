@@ -269,6 +269,10 @@ define(function (require) {
          * @return {boolean} 结果
          */
         collidesWith: function (polygon) {
+            if (!polygon) {
+                return false;
+            }
+
             var axes = this.getAxes().concat(polygon.getAxes());
             return !this.separationOnAxes(axes, polygon);
         },
@@ -339,8 +343,8 @@ define(function (require) {
 
             this.getOriginBounds();
 
-            for (var i = 0; i < this.children.length; i++) {
-                var child = this.children[i];
+            for (var childIndex = 0; childIndex < this.children.length; childIndex++) {
+                var child = this.children[childIndex];
                 if (child.followParent) {
                     child.move(x + child.relativeX, y + child.relativeY);
                 }
@@ -357,21 +361,34 @@ define(function (require) {
          * @return {Object} 当前 Polygon 实例
          */
         render: function (ctx) {
-            _childrenHandler.call(this);
+            // _childrenHandler.call(this);
 
             ctx.save();
             ctx.fillStyle = this.fillStyle;
             ctx.strokeStyle = this.strokeStyle;
             ctx.globalAlpha = this.alpha;
 
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
             // 如果有父精灵，那么就不需要自己设置 matrix 了，跟随父精灵变化
-            if (!this.parent || !this.followParent) {
-                this.matrix.reset();
-                this.matrix.translate(this.cx, this.cy);
+            if (this.parent && this.followParent) {
+                this.matrix.rotate(this.parent.angle);
+                this.matrix.scale(this.parent.scaleX, this.parent.scaleY);
+            }
+            else {
                 this.matrix.rotate(this.angle);
                 this.matrix.scale(this.scaleX, this.scaleY);
-                this.matrix.translate(-this.cx, -this.cy);
             }
+            this.matrix.translate(-this.cx, -this.cy);
+
+            // 如果有父精灵，那么就不需要自己设置 matrix 了，跟随父精灵变化
+            // if (!this.parent || !this.followParent) {
+            //     this.matrix.reset();
+            //     this.matrix.translate(this.cx, this.cy);
+            //     this.matrix.rotate(this.angle);
+            //     this.matrix.scale(this.scaleX, this.scaleY);
+            //     this.matrix.translate(-this.cx, -this.cy);
+            // }
 
             // this.matrix.reset();
             // this.matrix.translate(this.cx, this.cy);
@@ -432,31 +449,31 @@ define(function (require) {
     /**
      * 子精灵的处理
      */
-    function _childrenHandler() {
-        if (!this._.isHandleChildren) {
-            this._.isHandleChildren = true;
-            var children = this.children;
-            if (!Array.isArray(children)) {
-                children = [children];
-            }
+    // function _childrenHandler() {
+    //     if (!this._.isHandleChildren) {
+    //         this._.isHandleChildren = true;
+    //         var children = this.children;
+    //         if (!Array.isArray(children)) {
+    //             children = [children];
+    //         }
 
-            var stage = this.stage;
-            var len = children.length;
+    //         var stage = this.stage;
+    //         var len = children.length;
 
-            // 实例化 children 的时候，children 的 x, y 是相对于 parent 的 x, y 的
-            for (var i = 0; i < len; i++) {
-                var child = children[i];
-                child.relativeX = child.x;
-                child.relativeY = child.y;
-                child.x += this.x;
-                child.y += this.y;
-                child.move(child.x, child.y);
-                child.parent = this;
-                child.setMatrix(this.matrix.m);
-                stage.addDisplayObject(child);
-            }
-        }
-    }
+    //         // 实例化 children 的时候，children 的 x, y 是相对于 parent 的 x, y 的
+    //         for (var i = 0; i < len; i++) {
+    //             var child = children[i];
+    //             child.relativeX = child.x;
+    //             child.relativeY = child.y;
+    //             child.x += this.x;
+    //             child.y += this.y;
+    //             child.move(child.x, child.y);
+    //             child.parent = this;
+    //             child.setMatrix(this.matrix.m);
+    //             stage.addDisplayObject(child);
+    //         }
+    //     }
+    // }
 
     util.inherits(Polygon, DisplayObject);
 

@@ -160,6 +160,11 @@ define(function (require) {
          */
         createPath: function (ctx) {
             var points = this.points;
+
+            if (!points) {
+                return;
+            }
+
             var len = points.length;
             if (!len) {
                 return;
@@ -269,13 +274,27 @@ define(function (require) {
             ctx.font = this.font;
 
             // 如果有父精灵，那么就不需要自己设置 matrix 了，跟随父精灵变化
-            if (!this.parent || !this.followParent) {
-                this.matrix.reset();
-                this.matrix.translate(this.cx, this.cy);
+            // if (!this.parent || !this.followParent) {
+            //     this.matrix.reset();
+            //     this.matrix.translate(this.cx, this.cy);
+            //     this.matrix.rotate(this.angle);
+            //     this.matrix.scale(this.scaleX, this.scaleY);
+            //     this.matrix.translate(-this.cx, -this.cy);
+            // }
+
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            // 如果有父精灵，那么就不需要自己设置 matrix 了，跟随父精灵变化
+            if (this.parent && this.followParent) {
+                this.matrix.rotate(this.parent.angle);
+                this.matrix.scale(this.parent.scaleX, this.parent.scaleY);
+            }
+            else {
                 this.matrix.rotate(this.angle);
                 this.matrix.scale(this.scaleX, this.scaleY);
-                this.matrix.translate(-this.cx, -this.cy);
             }
+            this.matrix.translate(-this.cx, -this.cy);
+
 
             this.matrix.setCtxTransform(ctx);
 

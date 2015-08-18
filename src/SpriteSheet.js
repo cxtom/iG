@@ -7,6 +7,7 @@
 
 define(function (require) {
 
+    var ig = require('./ig');
     var util = require('./util');
     var Rectangle = require('./Rectangle');
 
@@ -37,8 +38,10 @@ define(function (require) {
             // 如果设置为 3，那么就代表每 3 * 16 = 48ms 执行一次，帧数为 1000 / 48 = 20fps
             jumpFrames: 0,
             // 设为 true 时，那么此 spriteSheet 在一组动画帧执行完成后自动销毁
+            isOnceDestroyed: false,
+            // isOnceDestroyed 为 true 时，一组动画结束后的回调
+            onceDestroyedDone: util.noop,
             isOnce: false,
-            // isOnce 为 true 时，一组动画结束后的回调
             onceDone: util.noop
         }, opts);
 
@@ -99,8 +102,10 @@ define(function (require) {
                 // 如果设置为 3，那么就代表每 3 * 16 = 48ms 执行一次，帧数为 1000 / 48 = 20fps
                 jumpFrames: this.jumpFrames,
                 // 设为 true 时，那么此 spriteSheet 在一组动画帧执行完成后自动销毁
+                isOnceDestroyed: false,
+                // isOnceDestroyed 为 true 时，一组动画结束后的回调
+                onceDestroyedDone: util.noop,
                 isOnce: false,
-                // isOnce 为 true 时，一组动画结束后的回调
                 onceDone: util.noop
             }, prop);
 
@@ -136,6 +141,7 @@ define(function (require) {
          *
          * @return {Object} SpriteSheet 实例
          */
+        /* eslint-disable fecs-camelcase */
         _step: function (dt, stepCount, requestID) {
             this.frameUpdateCount++;
 
@@ -162,13 +168,21 @@ define(function (require) {
                     // 还原 sy
                     this.sy -= (this.rows - 1) * this.tileH;
 
-                    if (this.isOnce) {
-                        this.status = STATUS.DESTROYED;
-                        if (util.getType(this.onceDone) === 'function') {
-                            var me = this;
-                            setTimeout(function () {
-                                me.onceDone(me);
+                    var me = this;
+                    if (me.isOnceDestroyed) {
+                        me.status = STATUS.DESTROYED;
+                        if (util.getType(me.onceDestroyedDone) === 'function') {
+                            var timeout = setTimeout(function () {
+                                clearTimeout(timeout);
+                                me.onceDestroyedDone(me);
                             }, 10);
+                        }
+                    }
+
+                    if (me.isOnce) {
+                        me.status = STATUS.NOT_UPDATE;
+                        if (util.getType(me.onceDone) === 'function') {
+                            me.onceDone(me);
                         }
                     }
                 }
@@ -193,6 +207,7 @@ define(function (require) {
 
             return this;
         },
+        /* eslint-enable fecs-camelcase */
 
         /**
          * 动画帧渲染
@@ -237,6 +252,7 @@ define(function (require) {
      *
      * @return {Object} SpriteSheet 实例
      */
+    /* eslint-disable fecs-camelcase */
     function _setup() {
         if (!this._.isSetup) {
             this._.isSetup = true;
@@ -297,6 +313,7 @@ define(function (require) {
         }
         return this;
     }
+    /* eslint-enable fecs-camelcase */
 
     util.inherits(SpriteSheet, Rectangle);
 

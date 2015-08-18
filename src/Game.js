@@ -9,6 +9,8 @@
 
 define(function (require) {
 
+    /* eslint-disable fecs-camelcase */
+
     var ig = require('./ig');
     var Event = require('./Event');
     var util = require('./util');
@@ -134,7 +136,6 @@ define(function (require) {
         start: function (startStageName, startCallback) {
             var _startStageName = '';
             var _startCallback = util.noop;
-            this.canStart = false;
 
             var argLength = arguments.length;
             switch (argLength) {
@@ -672,6 +673,7 @@ define(function (require) {
         if (this.maximize) {
             document.body.style.padding = 0;
             document.body.style.margin = 0;
+            document.body.style.overflow = 'hidden';
         }
 
         if (env.supportTouch) {
@@ -799,5 +801,5 @@ define(function (require) {
     util.inherits(Game, Event);
 
     return Game;
-
+    /* eslint-enable fecs-camelcase */
 });

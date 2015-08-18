@@ -1683,7 +1683,7 @@ define('ig/env', [
     }
     var isSupportLocalStorage = function () {
         try {
-            var support = 'localStorage' in window && window['localStorage'] !== null;
+            var support = 'localStorage' in window && window.localStorage !== null;
             var test = {
                 k: 'test key',
                 v: 'test value'
@@ -2369,6 +2369,11 @@ define('ig/DisplayObject', [
             this.matrix.m = m;
             return this;
         },
+        setRelativeXY: function (x, y) {
+            this.relativeX = x;
+            this.relativeY = y;
+            return this;
+        },
         setStatus: function (status) {
             this.status = status || this.status;
             var children = this.children;
@@ -2464,6 +2469,43 @@ define('ig/DisplayObject', [
             }).on('complete', function (d) {
                 completeFunc(d);
             });
+            var childLen = 0;
+            if (Array.isArray(this.children) && (childLen = this.children.length)) {
+                var childAnimOpts = {};
+                if (!this._.isHandleChildren) {
+                    var children = this.children;
+                    this._.isHandleChildren = true;
+                    for (var j = 0; j < childLen; j++) {
+                        var child = children[j];
+                        child.setRelativeXY(child.x, child.y);
+                        child.x += this.x;
+                        child.y += this.y;
+                        child.move(child.x, child.y);
+                        child.parent = this;
+                        child.setMatrix(this.matrix.m);
+                    }
+                }
+                var target = opts.target || {};
+                var range = opts.range || {};
+                for (var i = 0; i < childLen; i++) {
+                    if (this.children[i].followParent) {
+                        childAnimOpts = util.extend(true, {}, { source: this.children[i] }, opts);
+                        if (target.x) {
+                            childAnimOpts.target.x += this.children[i].x + this.x;
+                        }
+                        if (target.y) {
+                            childAnimOpts.target.y += this.children[i].y - this.y;
+                        }
+                        if (range.x) {
+                            childAnimOpts.range.x += this.children[i].x + this.x;
+                        }
+                        if (range.y) {
+                            childAnimOpts.range.y += this.children[i].y - this.y;
+                        }
+                        this.children[i].animate = new Animation(childAnimOpts).play();
+                    }
+                }
+            }
             return this;
         },
         stopAnimate: function () {
@@ -2590,6 +2632,9 @@ define('ig/Text', [
         },
         createPath: function (ctx) {
             var points = this.points;
+            if (!points) {
+                return;
+            }
             var len = points.length;
             if (!len) {
                 return;
@@ -2638,13 +2683,16 @@ define('ig/Text', [
             ctx.fillStyle = this.fillStyle;
             ctx.globalAlpha = this.alpha;
             ctx.font = this.font;
-            if (!this.parent || !this.followParent) {
-                this.matrix.reset();
-                this.matrix.translate(this.cx, this.cy);
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            if (this.parent && this.followParent) {
+                this.matrix.rotate(this.parent.angle);
+                this.matrix.scale(this.parent.scaleX, this.parent.scaleY);
+            } else {
                 this.matrix.rotate(this.angle);
                 this.matrix.scale(this.scaleX, this.scaleY);
-                this.matrix.translate(-this.cx, -this.cy);
             }
+            this.matrix.translate(-this.cx, -this.cy);
             this.matrix.setCtxTransform(ctx);
             this.generatePoints();
             if (this.useCache) {
@@ -2872,9 +2920,11 @@ define('ig/BitmapPolygon', [
 });'use strict';
 define('ig/SpriteSheet', [
     'require',
+    './ig',
     './util',
     './Rectangle'
 ], function (require) {
+    var ig = require('./ig');
     var util = require('./util');
     var Rectangle = require('./Rectangle');
     var STATUS = ig.getConfig('status');
@@ -2887,6 +2937,8 @@ define('ig/SpriteSheet', [
         Rectangle.apply(this, opts);
         util.extend(this, {
             jumpFrames: 0,
+            isOnceDestroyed: false,
+            onceDestroyedDone: util.noop,
             isOnce: false,
             onceDone: util.noop
         }, opts);
@@ -2914,6 +2966,8 @@ define('ig/SpriteSheet', [
                 offsetX: this.offsetX,
                 offsetY: this.offsetY,
                 jumpFrames: this.jumpFrames,
+                isOnceDestroyed: false,
+                onceDestroyedDone: util.noop,
                 isOnce: false,
                 onceDone: util.noop
             }, prop);
@@ -2938,13 +2992,20 @@ define('ig/SpriteSheet', [
                     this.sx = this.originalSX;
                     this.realCols = floor(this.cols - this.originalSX / this.tileW);
                     this.sy -= (this.rows - 1) * this.tileH;
-                    if (this.isOnce) {
-                        this.status = STATUS.DESTROYED;
-                        if (util.getType(this.onceDone) === 'function') {
-                            var me = this;
-                            setTimeout(function () {
-                                me.onceDone(me);
+                    var me = this;
+                    if (me.isOnceDestroyed) {
+                        me.status = STATUS.DESTROYED;
+                        if (util.getType(me.onceDestroyedDone) === 'function') {
+                            var timeout = setTimeout(function () {
+                                clearTimeout(timeout);
+                                me.onceDestroyedDone(me);
                             }, 10);
+                        }
+                    }
+                    if (me.isOnce) {
+                        me.status = STATUS.NOT_UPDATE;
+                        if (util.getType(me.onceDone) === 'function') {
+                            me.onceDone(me);
                         }
                     }
                 }
@@ -3091,6 +3152,7 @@ define('ig/SpriteSheet', [
             };
             var customResourceTypes = opts.customResourceTypes || {};
             var resourceTypes = util.extend({}, defaultResourceTypes, customResourceTypes);
+            var delayTimer = totalCount >= 30 ? 50 : 300;
             for (var i = 0; i < totalCount; i++) {
                 (function (index) {
                     var curResource = resource[index];
@@ -3124,7 +3186,7 @@ define('ig/SpriteSheet', [
                                 }
                                 invokeMethod(resourceId, resourceSrc, loadOneCallback, errorCallback);
                             }
-                        }, (index + 1) * 300);
+                        }, (index + 1) * delayTimer);
                     } else {
                         loadOneCallback(resourceId, me.asset[resourceId]);
                     }
@@ -3198,7 +3260,6 @@ define('ig/Game', [
         start: function (startStageName, startCallback) {
             var _startStageName = '';
             var _startCallback = util.noop;
-            this.canStart = false;
             var argLength = arguments.length;
             switch (argLength) {
             case 1:
@@ -3511,6 +3572,7 @@ define('ig/Game', [
         if (this.maximize) {
             document.body.style.padding = 0;
             document.body.style.margin = 0;
+            document.body.style.overflow = 'hidden';
         }
         if (env.supportTouch) {
             this.canvas.style.height = height * 2 + 'px';
@@ -3733,6 +3795,7 @@ define('ig/Stage', [
                 displayObj.game = this.game;
                 this.displayObjectList.push(displayObj);
                 this.displayObjects[displayObj.name] = displayObj;
+                _childrenHandler.call(this, displayObj);
             }
             return displayObj;
         },
@@ -3786,6 +3849,34 @@ define('ig/Stage', [
                     curDisplay._step(dt, stepCount, requestID);
                     curDisplay.step(dt, stepCount, requestID);
                 }
+            }
+        }
+    }
+    function _childrenHandler(displayObj) {
+        var children = displayObj.children;
+        if (!Array.isArray(children)) {
+            return;
+        }
+        var stage = this;
+        var len = children.length;
+        var i = 0;
+        var child;
+        if (!displayObj._.isHandleChildren) {
+            displayObj._.isHandleChildren = true;
+            for (i = 0; i < len; i++) {
+                child = children[i];
+                child.setRelativeXY(child.x, child.y);
+                child.x += displayObj.x;
+                child.y += displayObj.y;
+                child.move(child.x, child.y);
+                child.parent = displayObj;
+                child.setMatrix(displayObj.matrix.m);
+                stage.addDisplayObject(child);
+            }
+        } else {
+            for (i = 0; i < len; i++) {
+                child = children[i];
+                stage.addDisplayObject(child);
             }
         }
     }
@@ -4280,6 +4371,9 @@ define('ig/Rectangle', [
             return new Projection(Math.min.apply(Math, scalars), Math.max.apply(Math, scalars));
         },
         collidesWith: function (rectangle) {
+            if (!rectangle) {
+                return false;
+            }
             return !(this.x + this.width < rectangle.x || rectangle.x + rectangle.width < this.x || this.y + this.height < rectangle.y || rectangle.y + rectangle.height < this.y);
         },
         separationOnAxes: function (axes, rectangle) {
@@ -4307,18 +4401,20 @@ define('ig/Rectangle', [
             return this;
         },
         render: function (ctx) {
-            _childrenHandler.call(this);
             ctx.save();
             ctx.fillStyle = this.fillStyle;
             ctx.strokeStyle = this.strokeStyle;
             ctx.globalAlpha = this.alpha;
-            if (!this.parent || !this.followParent) {
-                this.matrix.reset();
-                this.matrix.translate(this.cx, this.cy);
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            if (this.parent && this.followParent) {
+                this.matrix.rotate(this.parent.angle);
+                this.matrix.scale(this.parent.scaleX, this.parent.scaleY);
+            } else {
                 this.matrix.rotate(this.angle);
                 this.matrix.scale(this.scaleX, this.scaleY);
-                this.matrix.translate(-this.cx, -this.cy);
             }
+            this.matrix.translate(-this.cx, -this.cy);
             this.generatePoints();
             this.getBounds();
             this.createPath(ctx);
@@ -4346,28 +4442,6 @@ define('ig/Rectangle', [
             }
         }
     };
-    function _childrenHandler() {
-        if (!this._.isHandleChildren) {
-            this._.isHandleChildren = true;
-            var children = this.children;
-            if (!Array.isArray(children)) {
-                children = [children];
-            }
-            var stage = this.stage;
-            var len = children.length;
-            for (var i = 0; i < len; i++) {
-                var child = children[i];
-                child.relativeX = child.x;
-                child.relativeY = child.y;
-                child.x += this.x;
-                child.y += this.y;
-                child.move(child.x, child.y);
-                child.parent = this;
-                child.setMatrix(this.matrix.m);
-                stage.addDisplayObject(child);
-            }
-        }
-    }
     util.inherits(Rectangle, DisplayObject);
     return Rectangle;
 });'use strict';
@@ -4523,6 +4597,9 @@ define('ig/Polygon', [
             return new Projection(Math.min.apply(Math, scalars), Math.max.apply(Math, scalars));
         },
         collidesWith: function (polygon) {
+            if (!polygon) {
+                return false;
+            }
             var axes = this.getAxes().concat(polygon.getAxes());
             return !this.separationOnAxes(axes, polygon);
         },
@@ -4568,8 +4645,8 @@ define('ig/Polygon', [
             this.cx = minX + (maxX - minX) / 2;
             this.cy = minY + (maxY - minY) / 2;
             this.getOriginBounds();
-            for (var i = 0; i < this.children.length; i++) {
-                var child = this.children[i];
+            for (var childIndex = 0; childIndex < this.children.length; childIndex++) {
+                var child = this.children[childIndex];
                 if (child.followParent) {
                     child.move(x + child.relativeX, y + child.relativeY);
                 }
@@ -4577,18 +4654,20 @@ define('ig/Polygon', [
             return this;
         },
         render: function (ctx) {
-            _childrenHandler.call(this);
             ctx.save();
             ctx.fillStyle = this.fillStyle;
             ctx.strokeStyle = this.strokeStyle;
             ctx.globalAlpha = this.alpha;
-            if (!this.parent || !this.followParent) {
-                this.matrix.reset();
-                this.matrix.translate(this.cx, this.cy);
+            this.matrix.reset();
+            this.matrix.translate(this.cx, this.cy);
+            if (this.parent && this.followParent) {
+                this.matrix.rotate(this.parent.angle);
+                this.matrix.scale(this.parent.scaleX, this.parent.scaleY);
+            } else {
                 this.matrix.rotate(this.angle);
                 this.matrix.scale(this.scaleX, this.scaleY);
-                this.matrix.translate(-this.cx, -this.cy);
             }
+            this.matrix.translate(-this.cx, -this.cy);
             this.generatePoints();
             this.getBounds();
             this.createPath(ctx);
@@ -4618,28 +4697,6 @@ define('ig/Polygon', [
             }
         }
     };
-    function _childrenHandler() {
-        if (!this._.isHandleChildren) {
-            this._.isHandleChildren = true;
-            var children = this.children;
-            if (!Array.isArray(children)) {
-                children = [children];
-            }
-            var stage = this.stage;
-            var len = children.length;
-            for (var i = 0; i < len; i++) {
-                var child = children[i];
-                child.relativeX = child.x;
-                child.relativeY = child.y;
-                child.x += this.x;
-                child.y += this.y;
-                child.move(child.x, child.y);
-                child.parent = this;
-                child.setMatrix(this.matrix.m);
-                stage.addDisplayObject(child);
-            }
-        }
-    }
     util.inherits(Polygon, DisplayObject);
     return Polygon;
 });
