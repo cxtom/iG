@@ -142,6 +142,16 @@ define(function (require) {
         // 当前 DisplayObject 实例的变换矩阵
         this.matrix = new Matrix();
 
+        /**
+         * 缩放的原点，默认为起始点，可以被覆盖
+         *
+         * @type {Object}
+         */
+        this.scaleOrigin = {
+            x: this.x,
+            y: this.y
+        };
+
         // 初始化的时候设置位置
         this.setPosX(this.x);
         this.setPosY(this.y);
@@ -154,6 +164,18 @@ define(function (require) {
          * 还原 constructor
          */
         constructor: DisplayObject,
+
+        /**
+         * @return {Object} DisplayObject 实例
+         *
+         * @param {number} x 横坐标
+         * @param {number} y 纵坐标
+         */
+        setScaleOrigin: function (x, y) {
+            this.scaleOrigin.x = x || this.scaleOrigin.x;
+            this.scaleOrigin.y = y || this.scaleOrigin.y;
+            return this;
+        },
 
         /**
          * 设置 DisplayObject 实例的 matrix
@@ -474,27 +496,29 @@ define(function (require) {
                         child.move(child.x, child.y);
                         child.parent = this;
                         child.setMatrix(this.matrix.m);
+                        child.setScaleOrigin(this.scaleOrigin.x, this.scaleOrigin.y);
                     }
                 }
 
                 var target = opts.target || {};
                 var range = opts.range || {};
+
                 for (var i = 0; i < childLen; i++) {
                     if (this.children[i].followParent) {
                         childAnimOpts = util.extend(true, {}, {source: this.children[i]}, opts);
                         // 子精灵的 x, y 是相对于父精灵的 x, y 来定位的
                         if (target.x) {
-                            childAnimOpts.target.x += this.children[i].x + this.x;
+                            childAnimOpts.target.x = this.children[i].x + animOpts.target.x - this.x;
                         }
                         if (target.y) {
-                            childAnimOpts.target.y += this.children[i].y - this.y;
+                            childAnimOpts.target.y = this.children[i].y + animOpts.target.y - this.y;
                         }
-
+                        // debugger
                         if (range.x) {
-                            childAnimOpts.range.x += this.children[i].x + this.x;
+                            childAnimOpts.range.x = animOpts.range.x;
                         }
                         if (range.y) {
-                            childAnimOpts.range.y += this.children[i].y - this.y;
+                            childAnimOpts.range.y = animOpts.range.y;
                         }
                         this.children[i].animate = new Animation(childAnimOpts).play();
                     }

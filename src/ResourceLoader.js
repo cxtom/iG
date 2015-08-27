@@ -7,6 +7,9 @@ define(function (require) {
 
     var util = require('./util');
 
+    // 匹配 base64 字符串
+    var REG_BASE64 = /^(data:\s*image\/(\w+);\s*base64,)/;
+
     var Howl = require('./dep/howler').Howl;
 
     /**
@@ -147,7 +150,16 @@ define(function (require) {
             var customResourceTypes = opts.customResourceTypes || {};
             var resourceTypes = util.extend({}, defaultResourceTypes, customResourceTypes);
 
-            var delayTimer = (totalCount >= 30 ? 50 : 300);
+            var delayTimer = (totalCount >= 10 ? 100 : 300);
+            if (totalCount <= 10) {
+                delayTimer = 300;
+            }
+            else if (totalCount > 10 && totalCount <= 100) {
+                delayTimer = 100;
+            }
+            else if (totalCount > 100) {
+                delayTimer = 10;
+            }
 
             for (var i = 0; i < totalCount; i++) {
                 /* jshint loopfunc:true */
@@ -210,6 +222,9 @@ define(function (require) {
      * @return {string} 后缀名
      */
     function getFileExt(fileName) {
+        if (REG_BASE64.test(fileName)) {
+            return RegExp.$2;
+        }
         var segments = fileName.split('.');
         return segments[segments.length - 1].toLowerCase();
     }
